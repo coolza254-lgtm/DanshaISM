@@ -1,0 +1,17 @@
+# build
+.gradle/
+build/
+/local.properties
+.idea/
+*.iml
+.kotlin/
+captures/
+
+# ห้าม commit ข้อมูลส่วนตัวและกุญแจเซ็นแอพ
+*.jks
+*.keystore
+*.p12
+keystore*.txt
+dansha-data-*.json
+expected-*.json
+/private/
