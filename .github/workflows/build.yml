@@ -24,9 +24,13 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: ทดสอบตัวคำนวณ (core)
+      - name: ทดสอบตัวคำนวณ (core) — เทียบกับระบบเดิมใน reference/
         run: ./gradlew --no-daemon :core:test
 
       - name: เตรียมกุญแจเซ็นแอพ

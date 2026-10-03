@@ -12,8 +12,17 @@
 
 | โมดูล | คืออะไร |
 |---|---|
-| `core/` | Kotlin ล้วน (ไม่พึ่ง Android): แถวข้อมูลทุกตาราง, อ่าน/เขียนไฟล์ `dansha-data/1`, วันที่/รอบเงินเดือน (เวลาไทยเสมอ) และตัวคำนวณ (Phase 2) |
+| `core/` | Kotlin ล้วน (ไม่พึ่ง Android): แถวข้อมูลทุกตาราง, อ่าน/เขียนไฟล์ `dansha-data/1`, วันที่/รอบเงินเดือน (เวลาไทยเสมอ) |
+| `core/.../engine/` | ตัวคำนวณทั้งหมด port จากระบบเดิม: หนี้ Ascend (`DebtEngine`), SPayLater, 60/40, แผนบิล, ภาพรวมรายรอบ, เช็คก่อนซื้อ, พอร์ต, แจ้งเตือน, การแก้ไขข้อมูล (`Store`) |
 | `app/` | แอพ Android: Room, หน้าจอ Compose, ตัวอัปเดต |
+| `reference/` | ระบบเดิม (JavaScript) ใช้เป็นตัวเทียบผลในชุดทดสอบ + ข้อมูลสมมติ `sample-data.json` |
+
+## หลักการคำนวณ
+
+ตัวคำนวณใน `core/.../engine/` ต้องให้ผล **เท่ากับระบบเดิมทุกตัวเลข** (ใช้ Double + ลำดับการปัดเศษเดิม)
+`ReferenceTest` รัน `reference/run.mjs` (ระบบเดิม) กับตัวคำนวณ Kotlin ด้วยข้อมูลและเวลาเดียวกัน
+~100 วัน (ทุก 2 วัน + วันออกบิล/ครบกำหนด) และขั้นตอนแก้ไขข้อมูลกว่า 100 ขั้น แล้วเทียบทุกช่อง
+ถ้าแก้สูตร ต้องแก้ทั้งสองฝั่งให้ตรงกันและให้ Id ยืนยันก่อน
 
 ## คำสั่ง
 
@@ -21,8 +30,11 @@
 # ทดสอบ core (ไม่ต้องมี Android SDK)
 ./gradlew -Pdansha.android=false :core:test
 
-# ทดสอบกับไฟล์ข้อมูลจริงที่อยู่นอก repo
+# ทดสอบกับไฟล์ข้อมูลจริงที่อยู่นอก repo (ต้องมี node สำหรับเทียบกับระบบเดิม)
 ./gradlew -Pdansha.android=false :core:test -Ddansha.data=/path/to/dansha-data.json
+
+# เลือกวัน/เวลาที่จะเทียบเอง
+./gradlew -Pdansha.android=false :core:test -Ddansha.data=... -Ddansha.dates=2026-10-03T12:00,2026-11-02T09:00
 
 # สร้าง APK (ต้องมี Android SDK)
 ./gradlew :app:assembleDebug

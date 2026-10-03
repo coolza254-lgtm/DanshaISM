@@ -46,6 +46,7 @@ enum class Tab(val label: String, val icon: ImageVector) {
 @Composable
 fun DanshaRoot(vm: MainViewModel) {
     val data by vm.data.collectAsState()
+    val computed by vm.computed.collectAsState()
     val message by vm.message.collectAsState()
     val update by vm.update.collectAsState()
     val pending by vm.pendingImport.collectAsState()
@@ -81,11 +82,11 @@ fun DanshaRoot(vm: MainViewModel) {
                 CircularProgressIndicator(Modifier.align(Alignment.Center))
             } else {
                 when (tab) {
-                    Tab.Home -> HomeScreen(d, vm, onOpenMore = { tab = Tab.More })
+                    Tab.Home -> HomeScreen(d, computed, vm, onOpenDebt = { tab = Tab.Debt })
                     Tab.Transactions -> TransactionsScreen(d)
                     Tab.Summary -> ComingSoon("สรุป", "สรุปรายรับรายจ่ายตามหมวด กราฟรายวัน", 4)
                     Tab.Plan -> ComingSoon("แผนบิล", "แผนบิลรายรอบ สร้างจากแม่แบบ จ่าย/ยกเลิกจ่าย ภาพรวมรายรอบ", 3)
-                    Tab.Debt -> ComingSoon("หนี้", "PayNext / Extra / SPayLater หนี้ย่อยรายก้อน ยอดปิด เบิกเงินสด", 3)
+                    Tab.Debt -> DebtScreen(computed)
                     Tab.More -> MoreScreen(d, vm)
                 }
             }

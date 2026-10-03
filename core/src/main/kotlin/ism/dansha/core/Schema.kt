@@ -108,7 +108,10 @@ object Schema {
 }
 
 object Ids {
+    /** ตัวสร้างส่วนท้ายของ id (เปลี่ยนได้ตอนทดสอบ) */
+    @Volatile
+    var suffix: () -> String = { java.util.UUID.randomUUID().toString().replace("-", "").take(12) }
+
     /** id แบบเดิม: prefix_ + 12 ตัวอักษร hex เช่น txn_51d64cd50a4f */
-    fun newId(prefix: String): String =
-        prefix + "_" + java.util.UUID.randomUUID().toString().replace("-", "").take(12)
+    fun newId(prefix: String): String = prefix + "_" + suffix()
 }

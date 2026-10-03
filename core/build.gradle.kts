@@ -23,4 +23,7 @@ tasks.test {
     useJUnitPlatform()
     // ไฟล์ข้อมูลจริง (ไม่อยู่ใน repo) สำหรับทดสอบในเครื่อง: -Ddansha.data=/path/dansha-data.json
     System.getProperty("dansha.data")?.let { systemProperty("dansha.data", it) }
+    // ตัวคำนวณอ้างอิง (JavaScript ของระบบเดิม) สำหรับเทียบผล — ต้องมี node
+    systemProperty("dansha.reference", rootProject.file("reference").absolutePath)
+    System.getProperty("dansha.dates")?.let { systemProperty("dansha.dates", it) }
 }

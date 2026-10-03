@@ -13,10 +13,19 @@ import ism.dansha.core.DataFile
 import ism.dansha.core.DataFileException
 import ism.dansha.core.Dates
 import ism.dansha.core.Schema
+import ism.dansha.core.engine.DebtState
+import ism.dansha.core.engine.Engine
+import ism.dansha.core.engine.Home
+import ism.dansha.core.engine.HomeFigures
+import ism.dansha.core.engine.Overview
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -39,6 +48,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs = app.getSharedPreferences("app", Context.MODE_PRIVATE)
 
     val data: StateFlow<DanshaData?> = repo.data
+
+    /** ตัวเลขที่คำนวณแล้ว (คำนวณใหม่ทุกครั้งที่ข้อมูลเปลี่ยน) */
+    data class Computed(val overview: Overview, val home: HomeFigures, val debts: Map<String, DebtState>)
+
+    val computed: StateFlow<Computed?> = repo.data
+        .map { d ->
+            d?.takeIf { !it.isEmpty() }?.let {
+                try {
+                    val ov = Engine.overview(it)
+                    Computed(ov, Home.figures(ov), Engine.debtStates(it, ov.today, withSchedule = true))
+                } catch (e: Exception) {
+                    android.util.Log.e("Dansha", "คำนวณไม่สำเร็จ", e)
+                    null
+                }
+            }
+        }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()

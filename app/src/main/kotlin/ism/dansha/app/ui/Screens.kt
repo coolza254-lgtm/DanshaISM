@@ -26,11 +26,9 @@ import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -55,7 +53,7 @@ import ism.dansha.core.Account
 import ism.dansha.core.DanshaData
 import ism.dansha.core.Transaction
 
-private val TABLE_LABELS = linkedMapOf(
+internal val TABLE_LABELS = linkedMapOf(
     "accounts" to "บัญชี",
     "transactions" to "รายการ",
     "bills" to "แผนบิล",
@@ -68,7 +66,7 @@ private val TABLE_LABELS = linkedMapOf(
     "prices" to "ราคาหลักทรัพย์",
 )
 
-private val ACCOUNT_TYPE_LABELS = mapOf("cash" to "เงินสด", "bank" to "บัญชี/วอลเล็ท", "revolving_credit" to "วงเงิน")
+internal val ACCOUNT_TYPE_LABELS = mapOf("cash" to "เงินสด", "bank" to "บัญชี/วอลเล็ท", "revolving_credit" to "วงเงิน")
 
 // ---------- ส่วนประกอบ ----------
 
@@ -141,78 +139,6 @@ fun ComingSoon(title: String, what: String, phase: Int) {
             Text(what, color = DanshaColors.Muted)
             Spacer(Modifier.height(8.dp))
             Text("จะมาใน Phase $phase · ข้อมูลที่นำเข้าเก็บไว้ในเครื่องเรียบร้อยแล้ว", color = DanshaColors.Muted, fontSize = 13.sp)
-        }
-    }
-}
-
-// ---------- ภาพรวม ----------
-
-@Composable
-fun HomeScreen(d: DanshaData, vm: MainViewModel, onOpenMore: () -> Unit) {
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let { vm.pickImport(it) }
-    }
-    LazyColumn(Modifier.fillMaxSize()) {
-        item { ScreenTitle("断捨ISM", "ภาพรวม") }
-        if (d.isEmpty()) {
-            item {
-                Card {
-                    Text("ยินดีต้อนรับ", fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "ข้อมูลทั้งหมดเก็บในเครื่องนี้ ไม่ต้องตั้งค่าอะไร\nถ้ามีไฟล์ข้อมูลจากระบบเดิม (dansha-data-….json) กดนำเข้าได้เลย",
-                        color = DanshaColors.Muted,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Button(onClick = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) }, Modifier.fillMaxWidth()) {
-                        Text("นำเข้าไฟล์ข้อมูล")
-                    }
-                    OutlinedButton(onClick = { vm.startFresh() }, Modifier.fillMaxWidth()) {
-                        Text("เริ่มใหม่ (ยังไม่มีข้อมูล)")
-                    }
-                }
-            }
-        } else {
-            item {
-                Card {
-                    SectionLabel("ข้อมูลในเครื่อง")
-                    Spacer(Modifier.height(8.dp))
-                    d.counts().filterValues { it > 0 }.forEach { (k, n) ->
-                        Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                            Text(TABLE_LABELS[k] ?: k, Modifier.weight(1f))
-                            Text("$n", fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "ยอดเงิน หนี้ และค่างวด จะคำนวณใน Phase 2–3 (ใช้สูตรเดิมทุกตัวเลข)",
-                        color = DanshaColors.Muted, fontSize = 12.sp,
-                    )
-                }
-            }
-            item { Spacer(Modifier.height(8.dp)); Text("บัญชี", Modifier.padding(horizontal = 20.dp), fontWeight = FontWeight.SemiBold) }
-            items(d.accounts.sortedWith(compareBy({ it.sort ?: Int.MAX_VALUE }, { it.name })), key = { it.id }) { a ->
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    AccountBadge(a)
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(a.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(
-                            ACCOUNT_TYPE_LABELS[a.type] ?: a.type,
-                            color = DanshaColors.Muted, fontSize = 12.sp,
-                        )
-                    }
-                    if (a.type == "revolving_credit" && a.credit_limit != null) {
-                        Text("วงเงิน ${formatMoney(a.credit_limit)}", color = DanshaColors.Muted, fontSize = 13.sp)
-                    }
-                }
-            }
-            item {
-                TextButton(onClick = onOpenMore, Modifier.padding(horizontal = 12.dp)) { Text("นำเข้า / ส่งออก / อัปเดต →") }
-            }
         }
     }
 }

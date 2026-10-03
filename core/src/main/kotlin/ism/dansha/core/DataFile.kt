@@ -123,6 +123,12 @@ object DataFile {
         }
     }
 
+    /** แปลงแถว JSON หนึ่งแถวเป็นแถวของตาราง (แปลงชนิดแบบเดียวกับตอนนำเข้า) */
+    fun <T> decodeRow(row: JsonObject, ser: KSerializer<T>): T = json.decodeFromJsonElement(ser, normalizeRow(row, ser))
+
+    /** แถวของตาราง → JSON (ครบทุกคอลัมน์) */
+    fun <T> encodeRow(row: T, ser: KSerializer<T>): JsonElement = json.encodeToJsonElement(ser, row)
+
     /** แปลงค่าในแถวให้ตรงชนิดคอลัมน์ (normCell_ ของระบบเดิม) */
     private fun normalizeRow(row: JsonObject, ser: KSerializer<*>): JsonObject {
         val d = ser.descriptor

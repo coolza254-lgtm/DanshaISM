@@ -74,17 +74,17 @@ class Converters {
 
 @Dao
 interface DanshaDao {
-    @Query("SELECT * FROM config") suspend fun config(): List<ConfigEntity>
-    @Query("SELECT * FROM accounts") suspend fun accounts(): List<AccountEntity>
-    @Query("SELECT * FROM transactions") suspend fun transactions(): List<TransactionEntity>
-    @Query("SELECT * FROM bills") suspend fun bills(): List<BillEntity>
-    @Query("SELECT * FROM billTemplates") suspend fun billTemplates(): List<BillTemplateEntity>
-    @Query("SELECT * FROM debts") suspend fun debts(): List<DebtEntity>
-    @Query("SELECT * FROM shopee") suspend fun shopee(): List<ShopeeEntity>
-    @Query("SELECT * FROM port") suspend fun port(): List<PortEntity>
-    @Query("SELECT * FROM categories") suspend fun categories(): List<CategoryEntity>
-    @Query("SELECT * FROM fx") suspend fun fx(): List<FxEntity>
-    @Query("SELECT * FROM prices") suspend fun prices(): List<PriceEntity>
+    @Query("SELECT * FROM config ORDER BY rowid") suspend fun config(): List<ConfigEntity>
+    @Query("SELECT * FROM accounts ORDER BY rowid") suspend fun accounts(): List<AccountEntity>
+    @Query("SELECT * FROM transactions ORDER BY rowid") suspend fun transactions(): List<TransactionEntity>
+    @Query("SELECT * FROM bills ORDER BY rowid") suspend fun bills(): List<BillEntity>
+    @Query("SELECT * FROM billTemplates ORDER BY rowid") suspend fun billTemplates(): List<BillTemplateEntity>
+    @Query("SELECT * FROM debts ORDER BY rowid") suspend fun debts(): List<DebtEntity>
+    @Query("SELECT * FROM shopee ORDER BY rowid") suspend fun shopee(): List<ShopeeEntity>
+    @Query("SELECT * FROM port ORDER BY rowid") suspend fun port(): List<PortEntity>
+    @Query("SELECT * FROM categories ORDER BY rowid") suspend fun categories(): List<CategoryEntity>
+    @Query("SELECT * FROM fx ORDER BY rowid") suspend fun fx(): List<FxEntity>
+    @Query("SELECT * FROM prices ORDER BY rowid") suspend fun prices(): List<PriceEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putConfig(rows: List<ConfigEntity>)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putAccounts(rows: List<AccountEntity>)
