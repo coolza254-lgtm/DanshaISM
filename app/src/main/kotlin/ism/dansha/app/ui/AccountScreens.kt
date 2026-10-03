@@ -147,7 +147,7 @@ fun AccountEditor(d: DanshaData, existing: Account?, vm: MainViewModel, onClose:
         Row(Modifier.horizontalScroll(rememberScrollState())) {
             PALETTE.forEach { hex ->
                 Box(
-                    Modifier.padding(end = 8.dp).size(34.dp).background(parseColor(hex), CircleShape)
+                    Modifier.padding(end = 8.dp).size(34.dp).background(tint(hex), CircleShape)
                         .border(if (hex == color) 2.dp else 1.dp, if (hex == color) DanshaColors.Ink else DanshaColors.Line, CircleShape)
                         .clickable { color = hex },
                 )

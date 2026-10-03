@@ -53,13 +53,12 @@ private val TYPE_LABELS = listOf("expense" to "รายจ่าย", "income" 
 // ---------- รายการ ----------
 
 @Composable
-fun TransactionsScreen(d: DanshaData, vm: MainViewModel) {
+fun TransactionsScreen(d: DanshaData, vm: MainViewModel, header: @Composable () -> Unit = {}) {
     val startDay = remember(d) { Engine.startDay(Engine.config(d)) }
     val current = remember(d) { Dates.payCycleOf(Dates.today(), startDay) }
     var cycle by rememberSaveable { mutableStateOf(current) }
     var query by rememberSaveable { mutableStateOf("") }
     var editing by remember { mutableStateOf<Transaction?>(null) }
-    var creating by remember { mutableStateOf(false) }
 
     val accounts = remember(d) { d.accounts.associateBy { it.id } }
     val categories = remember(d) { d.categories.associateBy { it.id } }
@@ -74,6 +73,7 @@ fun TransactionsScreen(d: DanshaData, vm: MainViewModel) {
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize()) {
             item { ScreenTitle("รายการ") }
+            item { header() }
             item {
                 Column(Modifier.padding(horizontal = 16.dp)) {
                     TextInput("ค้นหา (โน้ต หมวด บัญชี ยอด)", query, { query = it })
@@ -106,16 +106,10 @@ fun TransactionsScreen(d: DanshaData, vm: MainViewModel) {
                     TransactionRow(t, accounts, categories) { editing = t }
                 }
             }
-            item { Spacer(Modifier.height(88.dp)) }
+            item { Spacer(Modifier.height(24.dp)) }
         }
-        FloatingActionButton(
-            onClick = { creating = true },
-            modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
-            containerColor = DanshaColors.Ink, contentColor = Color.White,
-        ) { Icon(Icons.Filled.Add, "เพิ่มรายการ") }
     }
 
-    if (creating) TransactionEditor(d, null, vm) { creating = false }
     editing?.let { t -> TransactionEditor(d, t, vm) { editing = null } }
 }
 
@@ -128,7 +122,7 @@ fun TransactionRow(t: Transaction, accounts: Map<String, ism.dansha.core.Account
         else -> "" to DanshaColors.Ink
     }
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(36.dp).background(parseColor(cat?.color.orEmpty()), CircleShape), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(36.dp).background(tint(cat?.color.orEmpty()), CircleShape), contentAlignment = Alignment.Center) {
             Text(if (t.type == "transfer") "⇄" else cat?.icon ?: "•", fontSize = 16.sp)
         }
         Spacer(Modifier.width(12.dp))
@@ -146,99 +140,4 @@ fun TransactionRow(t: Transaction, accounts: Map<String, ism.dansha.core.Account
         Text("$sign${formatMoney(t.amount)}", color = color, fontWeight = FontWeight.SemiBold)
     }
     HorizontalDivider(Modifier.padding(start = 68.dp), color = DanshaColors.Line)
-}
-
-// ---------- ฟอร์มเพิ่ม/แก้รายการ ----------
-
-@Composable
-fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, onClose: () -> Unit) {
-    val e = existing
-    var type by remember { mutableStateOf(e?.type ?: "expense") }
-    var amount by remember { mutableStateOf(amountText(e?.amount)) }
-    var date by remember { mutableStateOf(e?.date ?: Dates.todayStr()) }
-    var accountId by remember { mutableStateOf(e?.account_id ?: Forms.defaultAccount(d, "expense")) }
-    var toAccountId by remember { mutableStateOf(e?.to_account_id.orEmpty()) }
-    var categoryId by remember { mutableStateOf(e?.category_id.orEmpty()) }
-    var subId by remember { mutableStateOf(e?.subcategory_id.orEmpty()) }
-    var note by remember { mutableStateOf(e?.note.orEmpty()) }
-    val hadCopay = (e?.gov_subsidy?.signum() ?: 0) > 0
-    var copay by remember { mutableStateOf(hadCopay) }
-    var fullPrice by remember { mutableStateOf(amountText(e?.full_price)) }
-    var error by remember { mutableStateOf<String?>(null) }
-
-    val accounts = d.accounts.filter { it.active || it.id == e?.account_id || it.id == e?.to_account_id }
-        .sortedWith(compareBy({ it.sort ?: Int.MAX_VALUE }, { it.name }))
-    val accountOptions = accounts.map { it.id to it.name }
-    val eligible = Forms.copayEligible(d, type, accountId, date)
-    val useCopay = copay && eligible
-    val preview = if (useCopay) Forms.copayPreview(d, type, accountId, date, Forms.parseAmount(fullPrice), e?.id) else null
-
-    fun save() {
-        error = null
-        val acc = d.accounts.firstOrNull { it.id == accountId }
-        val amt = if (useCopay) preview?.self else Forms.parseAmount(amount)
-        val row = (e ?: Transaction(id = "", source = "manual")).copy(
-            date = date, type = type, account_id = accountId,
-            to_account_id = if (type == "transfer") toAccountId else "",
-            amount = amt?.toDec(),
-            currency = acc?.currency ?: e?.currency.orEmpty(),
-            category_id = if (type == "transfer") "" else categoryId,
-            subcategory_id = if (type == "transfer") "" else subId,
-            note = note,
-            full_price = if (useCopay) Forms.parseAmount(fullPrice)?.toDec() else e?.full_price,
-            gov_subsidy = e?.gov_subsidy,
-        )
-        // true = คำนวณสิทธิใหม่, false = ยกเลิกสิทธิของรายการนี้, null = ไม่เกี่ยว
-        val copayFlag: Boolean? = when {
-            useCopay -> true
-            hadCopay -> false
-            else -> null
-        }
-        vm.edit<Any>(ok = if (e == null) "บันทึกแล้ว" else "แก้ไขแล้ว", onError = { error = it }, onOk = { onClose() }) {
-            if (e == null) createTransaction(row, copayFlag) else updateTransaction(row, copayFlag)
-        }
-    }
-
-    FormPage(if (e == null) "เพิ่มรายการ" else "แก้ไขรายการ", onClose, ::save) {
-        error?.let { Note(it, DanshaColors.Negative) }
-        ChoiceChips(TYPE_LABELS, type, { t ->
-            type = t
-            if (e == null) accountId = Forms.defaultAccount(d, t)
-            categoryId = ""; subId = ""
-        })
-        if (eligible && type == "expense") {
-            SwitchRow("ใช้สิทธิ 60/40", copay, { copay = it }, sub = preview?.let { "รัฐช่วยได้วันนี้อีก ${formatMoney(BigDecimal.valueOf(it.leftToday))}" })
-        }
-        if (useCopay) {
-            AmountField("ราคาเต็ม (บาท)", fullPrice, { fullPrice = it })
-            preview?.let {
-                Note("รัฐจ่าย ${formatMoney(BigDecimal.valueOf(it.gov))} · จ่ายเอง ${formatMoney(BigDecimal.valueOf(it.self))}", DanshaColors.Ink)
-            }
-        } else {
-            AmountField("จำนวนเงิน", amount, { amount = it })
-        }
-        DateField("วันที่", date, { date = it })
-        Picker(if (type == "transfer") "จากบัญชี" else "บัญชี", accountOptions, accountId, { accountId = it })
-        if (type == "transfer") {
-            Picker("ไปบัญชี", listOf("" to "— เลือก —") + accountOptions.filter { it.first != accountId }, toAccountId, { toAccountId = it })
-            Note("จ่ายหนี้ PayNext / SPayLater = โอนเข้าบัญชีวงเงินนั้น")
-        } else {
-            val tree = Forms.categoryTree(d, type, keep = setOf(categoryId, subId))
-            Picker("หมวด", listOf("" to "— ไม่ระบุ —") + tree.map { it.category.id to "${it.category.icon} ${it.category.name}" }, categoryId, {
-                categoryId = it; subId = ""
-            })
-            val subs = tree.firstOrNull { it.category.id == categoryId }?.children.orEmpty()
-            if (subs.isNotEmpty()) {
-                ChoiceChips(listOf("" to "ทั้งหมวด") + subs.map { it.id to it.name }, subId, { subId = it })
-            }
-        }
-        TextInput("โน้ต", note, { note = it }, singleLine = false)
-        if (e != null) {
-            if (e.source == "bill_plan") Note("รายการนี้มาจากแผนบิล ลบแล้วแผนจะกลับเป็น \"ยังไม่จ่าย\"")
-            if (e.source == "debt") Note("รายการนี้ผูกกับหนี้ย่อย (เบิกเงินสด) ลบแล้วหนี้ย่อยจะถูกลบด้วย")
-            DeleteButton("รายการนี้") {
-                vm.edit<Unit>(ok = "ลบแล้ว", onError = { error = it }, onOk = { onClose() }) { deleteTransaction(e.id) }
-            }
-        }
-    }
 }

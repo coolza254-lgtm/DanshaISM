@@ -69,6 +69,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    /** ธีม: system | light | dark (เก็บในเครื่อง ไม่อยู่ในไฟล์ข้อมูล) */
+    private val _uiMode = MutableStateFlow(prefs.getString("ui_mode", "system") ?: "system")
+    val uiMode: StateFlow<String> = _uiMode.asStateFlow()
+
+    fun setUiMode(mode: String) {
+        prefs.edit().putString("ui_mode", mode).apply()
+        _uiMode.value = mode
+    }
+
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 

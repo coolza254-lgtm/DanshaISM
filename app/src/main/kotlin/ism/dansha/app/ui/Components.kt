@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -75,11 +76,11 @@ fun FormPage(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        Surface(Modifier.fillMaxSize(), color = Color.White) {
+        Surface(Modifier.fillMaxSize(), color = LocalPalette.current.bg) {
             Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "ย้อนกลับ") }
-                    Text(title, Modifier.weight(1f), fontSize = 19.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "ย้อนกลับ", tint = DanshaColors.Ink) }
+                    Text(title, Modifier.weight(1f), fontSize = 19.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, color = DanshaColors.Ink)
                     if (onSave != null) {
                         Button(onClick = onSave, enabled = saveEnabled, modifier = Modifier.padding(end = 8.dp)) { Text(saveLabel) }
                     }
@@ -99,7 +100,7 @@ fun FormPage(
 fun TextInput(label: String, value: String, onChange: (String) -> Unit, modifier: Modifier = Modifier, singleLine: Boolean = true, placeholder: String? = null) {
     OutlinedTextField(
         value = value, onValueChange = onChange, label = { Text(label) }, singleLine = singleLine,
-        placeholder = placeholder?.let { { Text(it) } }, modifier = modifier.fillMaxWidth(),
+        placeholder = placeholder?.let { { Text(it) } }, modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
     )
 }
 
@@ -115,6 +116,7 @@ fun AmountField(label: String, value: String, onChange: (String) -> Unit, modifi
         supportingText = supporting?.let { { Text(it) } },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
     )
 }
 
@@ -130,7 +132,7 @@ fun DateField(label: String, value: String, onChange: (String) -> Unit, modifier
     Box(modifier.fillMaxWidth()) {
         OutlinedTextField(
             value = if (value.isEmpty()) "" else thaiDate(value), onValueChange = {}, readOnly = true,
-            label = { Text(label) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+            label = { Text(label) }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
         )
         // ชั้นโปร่งใสรับการแตะ (ช่องที่ readOnly ไม่ส่ง onClick)
         Box(Modifier.matchParentSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { open = true })
@@ -166,7 +168,7 @@ fun <T> Picker(label: String, options: List<Pair<T, String>>, selected: T, onSel
             value = options.firstOrNull { it.first == selected }?.second.orEmpty(), onValueChange = {}, readOnly = true,
             label = { Text(label) }, singleLine = true,
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(), shape = RoundedCornerShape(14.dp),
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { (v, text) ->
@@ -181,11 +183,15 @@ fun <T> Picker(label: String, options: List<Pair<T, String>>, selected: T, onSel
 fun <T> ChoiceChips(options: List<Pair<T, String>>, selected: T?, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
     Row(modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEach { (v, text) ->
+            val p = LocalPalette.current
             FilterChip(
                 selected = v == selected, onClick = { onSelect(v) }, label = { Text(text) },
+                shape = RoundedCornerShape(50),
                 colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = DanshaColors.Ink, selectedLabelColor = Color.White,
+                    containerColor = p.surface, labelColor = p.ink,
+                    selectedContainerColor = p.primary, selectedLabelColor = p.onPrimary,
                 ),
+                border = null,
             )
         }
     }
@@ -230,4 +236,38 @@ fun DeleteButton(what: String, onDelete: () -> Unit) {
     Spacer(Modifier.height(8.dp))
     TextButton(onClick = { ask = true }, modifier = Modifier.fillMaxWidth()) { Text("ลบ$what", color = DanshaColors.Negative) }
     if (ask) ConfirmDialog("ลบ$what?", "ลบแล้วกู้คืนไม่ได้", "ลบ", onDelete, { ask = false })
+}
+
+/** หน้าเต็มจอที่เนื้อหาเลื่อนเอง (เช่นมี LazyColumn) */
+@Composable
+fun OverlayPage(title: String, onDismiss: () -> Unit, content: @Composable () -> Unit) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        Surface(Modifier.fillMaxSize(), color = LocalPalette.current.bg) {
+            Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "ย้อนกลับ", tint = DanshaColors.Ink) }
+                    Text(title, Modifier.weight(1f), fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = DanshaColors.Ink)
+                }
+                Box(Modifier.fillMaxWidth().weight(1f)) { content() }
+            }
+        }
+    }
+}
+
+/** ปฏิทินเลือกวัน (yyyy-MM-dd) แบบป๊อปอัป */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DatePickerPopup(value: String, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    val initial = runCatching { LocalDate.parse(value) }.getOrNull() ?: LocalDate.now()
+    val state = rememberDatePickerState(initialSelectedDateMillis = initial.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli())
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = {
+                state.selectedDateMillis?.let { onPick(Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().toString()) }
+                onDismiss()
+            }) { Text("ตกลง") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("ยกเลิก") } },
+    ) { DatePicker(state = state) }
 }

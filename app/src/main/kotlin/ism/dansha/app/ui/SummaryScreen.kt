@@ -51,7 +51,7 @@ fun shareText(context: Context, text: String) {
 }
 
 @Composable
-fun SummaryScreen(d: DanshaData, vm: MainViewModel) {
+fun SummaryScreen(d: DanshaData, vm: MainViewModel, header: @Composable () -> Unit = {}) {
     val startDay = remember(d) { Engine.startDay(Engine.config(d)) }
     var preset by rememberSaveable { mutableStateOf(Summary.Preset.ThisCycle) }
     var custom by rememberSaveable { mutableStateOf(false) }
@@ -65,6 +65,7 @@ fun SummaryScreen(d: DanshaData, vm: MainViewModel) {
 
     LazyColumn(Modifier.fillMaxSize()) {
         item { ScreenTitle("สรุป", "${thaiDate(s.start)} – ${thaiDate(s.end)}") }
+        item { header() }
         item {
             Column(Modifier.padding(horizontal = 16.dp)) {
                 ChoiceChips(
@@ -139,7 +140,7 @@ private fun CategoryBar(c: CategoryTotal, barColor: androidx.compose.ui.graphics
     var open by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().clickable(enabled = c.children.isNotEmpty()) { open = !open }.padding(vertical = 5.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(26.dp).background(parseColor(c.color), CircleShape), contentAlignment = Alignment.Center) { Text(c.icon, fontSize = 13.sp) }
+            Box(Modifier.size(26.dp).background(tint(c.color), CircleShape), contentAlignment = Alignment.Center) { Text(c.icon, fontSize = 13.sp) }
             Spacer(Modifier.width(8.dp))
             Text(c.name + if (c.children.isNotEmpty()) (if (open) " ▴" else " ▾") else "", Modifier.weight(1f), fontSize = 14.sp)
             Text("${money(c.amount)} · ${c.share}%", fontSize = 13.sp)

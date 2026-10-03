@@ -180,7 +180,7 @@ private fun CategoriesPage(d: DanshaData, vm: MainViewModel, onClose: () -> Unit
 @Composable
 private fun CategoryLine(c: Category, child: Boolean, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = if (child) 32.dp else 0.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(if (child) 24.dp else 32.dp).background(parseColor(c.color), CircleShape), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(if (child) 24.dp else 32.dp).background(tint(c.color), CircleShape), contentAlignment = Alignment.Center) {
             Text(c.icon, fontSize = if (child) 12.sp else 16.sp)
         }
         Spacer(Modifier.width(10.dp))
@@ -213,7 +213,7 @@ private fun CategoryEditor(d: DanshaData, existing: Category?, type: String, par
         Row(Modifier.horizontalScroll(rememberScrollState())) {
             CAT_COLORS.forEach { hex ->
                 Box(
-                    Modifier.padding(end = 8.dp).size(32.dp).background(parseColor(hex), CircleShape)
+                    Modifier.padding(end = 8.dp).size(32.dp).background(tint(hex), CircleShape)
                         .border(if (hex == color) 2.dp else 1.dp, if (hex == color) DanshaColors.Ink else DanshaColors.Line, CircleShape)
                         .clickable { color = hex },
                 )

@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.EventRepeat
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.ShoppingBag
@@ -37,6 +39,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,22 +78,38 @@ internal val ACCOUNT_TYPE_LABELS = mapOf("cash" to "เงินสด", "bank" 
 
 // ---------- ส่วนประกอบ ----------
 
+/** ปุ่ม "เพิ่มเติม" มุมขวาบน (Root ใส่ให้ทุกแท็บ) */
+val LocalOpenMore = androidx.compose.runtime.staticCompositionLocalOf<(() -> Unit)?> { null }
+
 @Composable
-fun ScreenTitle(title: String, subtitle: String? = null) {
-    Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 8.dp)) {
-        Text(title, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-        if (subtitle != null) Text(subtitle, color = DanshaColors.Muted, fontSize = 13.sp)
+fun ScreenTitle(title: String, subtitle: String? = null, actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {}) {
+    val openMore = LocalOpenMore.current
+    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 18.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = DanshaColors.Ink)
+            if (subtitle != null) Text(subtitle, color = DanshaColors.Muted, fontSize = 13.sp)
+        }
+        actions()
+        if (openMore != null) {
+            androidx.compose.material3.IconButton(onClick = openMore) {
+                Icon(Icons.Outlined.GridView, contentDescription = "เพิ่มเติม", tint = DanshaColors.Ink)
+            }
+        }
     }
 }
 
+/** การ์ดมุมโค้ง พื้นขาว/เทาเข้ม มีเงาบางๆ */
 @Composable
-fun Card(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+fun Card(modifier: Modifier = Modifier, padding: androidx.compose.ui.unit.Dp = 16.dp, color: androidx.compose.ui.graphics.Color? = null, content: @Composable () -> Unit) {
+    val p = LocalPalette.current
+    val shape = RoundedCornerShape(20.dp)
     Column(
         modifier
             .padding(horizontal = 16.dp, vertical = 6.dp)
             .fillMaxWidth()
-            .border(1.dp, DanshaColors.Line, RoundedCornerShape(14.dp))
-            .padding(16.dp)
+            .then(if (p.dark) Modifier.border(1.dp, p.line, shape) else Modifier.shadow(2.dp, shape, ambientColor = p.primary.copy(alpha = 0.25f), spotColor = p.primary.copy(alpha = 0.25f)))
+            .background(color ?: p.card, shape)
+            .padding(padding)
     ) { content() }
 }
 
@@ -104,7 +123,7 @@ fun SectionLabel(text: String) {
 fun AccountBadge(account: Account?, size: Int = 36) {
     val label = accountShort(account)
     Box(
-        Modifier.size(size.dp).background(parseColor(account?.color.orEmpty()), CircleShape),
+        Modifier.size(size.dp).background(tint(account?.color.orEmpty()), CircleShape),
         contentAlignment = Alignment.Center,
     ) {
         Text(label, fontSize = (if (label.length >= 3) size / 3.4 else size / 2.6).sp, fontWeight = FontWeight.Bold, color = DanshaColors.Ink)
@@ -172,7 +191,13 @@ fun MoreScreen(d: DanshaData, vm: MainViewModel, onOpen: (Page) -> Unit) {
     var confirmFresh by remember { mutableStateOf(false) }
 
     LazyColumn(Modifier.fillMaxSize()) {
-        item { ScreenTitle("เพิ่มเติม") }
+        item {
+            Card {
+                SectionLabel("หน้าตา")
+                val mode by vm.uiMode.collectAsState()
+                ChoiceChips(listOf("system" to "ตามมือถือ", "light" to "สว่าง", "dark" to "มืด"), mode, { vm.setUiMode(it) })
+            }
+        }
         item {
             Card {
                 SectionLabel("จัดการ")
