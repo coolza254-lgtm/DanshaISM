@@ -133,7 +133,7 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
                         )
                     }
                     Text(
-                        (if (h.projected != null) "สิ้นรอบเหลือ " + signedBaht(h.projected) else "ยังไม่มีแผนรอบนี้ · คิดจากเงินที่มี") + " · อีก ${h.daysLeft} วัน",
+                        (h.projected?.let { "สิ้นรอบเหลือ " + signedBaht(it) } ?: "ยังไม่มีแผนรอบนี้ · คิดจากเงินที่มี") + " · อีก ${h.daysLeft} วัน",
                         color = p.ink, fontSize = 15.sp,
                     )
                     Spacer(Modifier.height(12.dp))
