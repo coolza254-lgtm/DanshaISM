@@ -52,3 +52,7 @@ push ปกติแค่ทดสอบ + build ไม่รบกวนแอ
 GitHub Actions (`.github/workflows/build.yml`) ทดสอบ + สร้าง APK ทุก push
 และสร้าง Release ที่เซ็นแล้ว (`v1.0.<เลข build>`) เมื่อ push เข้า branch หลัก หรือกด **Run workflow**
 ต้องมี secrets `ANDROID_KEYSTORE_BASE64` และ `ANDROID_KEYSTORE_PASSWORD` (alias `dansha`)
+
+## ฟอนต์
+
+แอพฝังฟอนต์ [Noto Sans Thai](https://fonts.google.com/noto/specimen/Noto+Sans+Thai) (`app/src/main/res/font/`) ใช้สัญญาอนุญาต SIL Open Font License 1.1
