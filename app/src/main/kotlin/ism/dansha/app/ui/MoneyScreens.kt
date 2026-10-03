@@ -59,7 +59,7 @@ private fun Figure(label: String, value: String, modifier: Modifier = Modifier, 
 }
 
 @Composable
-private fun KeyValue(label: String, value: String, color: Color = DanshaColors.Ink, bold: Boolean = false) {
+internal fun KeyValue(label: String, value: String, color: Color = DanshaColors.Ink, bold: Boolean = false) {
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
         Text(label, Modifier.weight(1f), color = DanshaColors.Muted, fontSize = 14.sp)
         Text(value, color = color, fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal, fontSize = 14.sp)
@@ -73,6 +73,7 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { vm.pickImport(it) }
     }
+    var editingTxn by remember { mutableStateOf<ism.dansha.core.Transaction?>(null) }
     LazyColumn(Modifier.fillMaxSize()) {
         item { ScreenTitle("断捨ISM", c?.let { "รอบ ${it.overview.payCycle.substring(8)} · ${thaiDate(it.overview.payCycleRange.start)} – ${thaiDate(it.overview.payCycleRange.end)}" }) }
         if (d.isEmpty()) {
@@ -157,12 +158,20 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
                 }
             }
         }
+        val recent = d.transactions.sortedWith(compareByDescending<ism.dansha.core.Transaction> { it.date }.thenByDescending { it.created_at }).take(5)
+        if (recent.isNotEmpty()) {
+            item { Spacer(Modifier.height(8.dp)); Text("รายการล่าสุด", Modifier.padding(horizontal = 20.dp), fontWeight = FontWeight.SemiBold) }
+            val accs = d.accounts.associateBy { it.id }
+            val cats = d.categories.associateBy { it.id }
+            recent.forEach { t -> item(key = "r_${t.id}") { TransactionRow(t, accs, cats) { editingTxn = t } } }
+        }
         item { Spacer(Modifier.height(8.dp)); Text("บัญชี", Modifier.padding(horizontal = 20.dp), fontWeight = FontWeight.SemiBold) }
         items(c.overview.accounts.filter { it.account.active }.sortedWith(compareBy({ it.account.sort ?: Int.MAX_VALUE }, { it.account.name })), key = { it.account.id }) { a ->
             AccountRow(a)
         }
         item { Spacer(Modifier.height(16.dp)) }
     }
+    editingTxn?.let { t -> TransactionEditor(d, t, vm) { editingTxn = null } }
 }
 
 @Composable
@@ -180,104 +189,5 @@ private fun AccountRow(a: AccountView) {
         val cur = if (a.account.currency != "THB") " ${a.account.currency}" else ""
         if (a.isCredit) Text("ใช้ไป ${money(a.used)}", color = if ((a.used ?: 0.0) > 0) DanshaColors.Negative else DanshaColors.Ink, fontWeight = FontWeight.SemiBold)
         else Text(money(a.balance) + cur, color = signColor(a.balance), fontWeight = FontWeight.SemiBold)
-    }
-}
-
-// ---------- หนี้ ----------
-
-@Composable
-fun DebtScreen(c: MainViewModel.Computed?) {
-    LazyColumn(Modifier.fillMaxSize()) {
-        item { ScreenTitle("หนี้", "ดูอย่างเดียว · จ่าย/โปะ คำนวณยอดปิด เบิกเงินสด มาใน Phase 3") }
-        if (c == null) {
-            item { Text("ยังไม่มีข้อมูล", Modifier.padding(20.dp), color = DanshaColors.Muted) }
-            return@LazyColumn
-        }
-        val states = c.debts
-        val ascend = states.values.filterIsInstance<AscendState>()
-        item {
-            Card {
-                val total = states.values.sumOf { it.outstanding }
-                val interest = ascend.sumOf { it.accruedInterest }
-                val payoff = ascend.sumOf { it.payoffToday } + states.values.filterIsInstance<SplState>().sumOf { it.outstanding }
-                KeyValue("หนี้รวม (ตัวคำนวณ)", money(total), DanshaColors.Negative, bold = true)
-                KeyValue("ดอกสะสมถึงวันนี้", money(interest))
-                KeyValue("ปิดทั้งหมดวันนี้", money(payoff))
-                if (ascend.size > 1) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "กลยุทธ์: โปะ PayNext ธรรมดาให้หมดก่อน (ผ่อนสั้น ดอกต่องวดแรงกว่า) ส่วน Extra จ่ายตามบิลพอ",
-                        Modifier.background(DanshaColors.Surface, RoundedCornerShape(8.dp)).padding(10.dp),
-                        fontSize = 12.sp,
-                    )
-                }
-            }
-        }
-        val names = c.overview.accounts.associate { it.account.id to it.account }
-        states.values.forEach { st ->
-            item(key = st.accountId) { DebtAccountCard(names[st.accountId]?.name ?: st.accountId, names[st.accountId]?.credit_limit?.toDouble(), st) }
-        }
-        item { Spacer(Modifier.height(16.dp)) }
-    }
-}
-
-@Composable
-private fun DebtAccountCard(name: String, limit: Double?, st: DebtState) {
-    var open by remember { mutableStateOf(false) }
-    Card {
-        Text(name, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
-        Spacer(Modifier.height(4.dp))
-        KeyValue("ใช้ไป / วงเงิน", "${money(st.outstanding)} / ${money(limit)}", bold = true)
-        if (st is AscendState) {
-            KeyValue("ดอกสะสมถึงวันนี้", money(st.accruedInterest))
-            KeyValue("ดอกต่อวันประมาณ", money(st.dailyInterest))
-            KeyValue("ปิดหนี้วันนี้", money(st.payoffToday))
-            if (st.fees > 0) KeyValue("ค่าธรรมเนียมค้าง", money(st.fees), DanshaColors.Negative)
-        }
-        st.currentBill?.let { b ->
-            KeyValue(if (b.overdue == true) "บิลค้าง (เลยกำหนด)" else "บิลปัจจุบัน ครบ ${thaiDate(b.due)}", money(b.amount), if (b.overdue == true) DanshaColors.Negative else DanshaColors.Ink, bold = true)
-        }
-        st.nextBill?.let { b ->
-            KeyValue("บิลถัดไป ออก ${thaiDate(b.date)} ครบ ${thaiDate(b.due)}", money(b.totalDue) + (b.interest?.let { " (ดอก ${money(it)})" } ?: ""))
-        }
-        if (st is AscendState && st.cycleSpend.total > 0) {
-            KeyValue("ใช้ในรอบบิล ${thaiDate(st.cycleSpend.start)} – ${thaiDate(st.cycleSpend.end)}", money(st.cycleSpend.total))
-        }
-        TextButton(onClick = { open = !open }) { Text(if (open) "ซ่อนรายละเอียด" else "ดูหนี้ย่อย / บิลล่วงหน้า") }
-        if (open) {
-            when (st) {
-                is AscendState -> {
-                    st.loans.filter { it.status == "active" }.forEach { l ->
-                        HorizontalDivider(color = DanshaColors.Line)
-                        Column(Modifier.padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                            Text(l.desc.ifEmpty { l.kind }, fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                            Text(
-                                "กู้ ${thaiDate(l.start)} · ${money(l.principal)} · ${l.tenor} งวด งวดละ ${money(l.installment)}",
-                                color = DanshaColors.Muted, fontSize = 12.sp,
-                            )
-                            Text(
-                                "จ่ายแล้ว ${l.paidPeriods} งวด เหลือ ${l.periodsLeft} · คงเหลือ ${money(l.remaining)} · ดอกค้าง ${money(l.accruedInterest)}",
-                                fontSize = 12.sp,
-                            )
-                        }
-                    }
-                    if (st.pendingFull.isNotEmpty()) {
-                        HorizontalDivider(color = DanshaColors.Line)
-                        Text("ยอดเต็มจำนวนค้าง", Modifier.padding(top = 6.dp), fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                        st.pendingFull.forEach { u -> KeyValue("${thaiDate(u.date)} ${u.desc}", money(u.remaining)) }
-                    }
-                    st.bills?.take(6)?.let { bills ->
-                        HorizontalDivider(color = DanshaColors.Line)
-                        Text("บิลล่วงหน้า (สมมติจ่ายตรงบิลทุกงวด)", Modifier.padding(top = 6.dp), fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                        bills.forEach { b -> KeyValue("ครบ ${thaiDate(b.due)}", "${money(b.totalDue)} (ดอก ${money(b.interest)})") }
-                    }
-                }
-                is SplState -> {
-                    st.installments.filter { it.left > 0.004 }.forEach { i ->
-                        KeyValue("${thaiDate(i.due)} ${i.item} (${i.k}/${i.n})", money(i.left))
-                    }
-                }
-            }
-        }
     }
 }

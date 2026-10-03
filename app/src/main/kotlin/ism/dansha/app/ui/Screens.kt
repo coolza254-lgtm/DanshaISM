@@ -21,7 +21,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.EventRepeat
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.SystemUpdate
@@ -157,7 +159,7 @@ fun thaiDate(iso: String): String {
 // ---------- เพิ่มเติม ----------
 
 @Composable
-fun MoreScreen(d: DanshaData, vm: MainViewModel) {
+fun MoreScreen(d: DanshaData, vm: MainViewModel, onOpen: (Page) -> Unit) {
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { vm.pickImport(it) }
     }
@@ -167,7 +169,16 @@ fun MoreScreen(d: DanshaData, vm: MainViewModel) {
     var confirmFresh by remember { mutableStateOf(false) }
 
     LazyColumn(Modifier.fillMaxSize()) {
-        item { ScreenTitle("เพิ่มเติม", "บัญชี · Shopee · พอร์ต · ตั้งค่า (ทยอยมาใน Phase 3–4)") }
+        item { ScreenTitle("เพิ่มเติม") }
+        item {
+            Card {
+                SectionLabel("จัดการ")
+                MenuRow(Icons.Outlined.AccountBalance, "บัญชี", "เพิ่ม/แก้บัญชี วงเงิน ตัวคำนวณหนี้ (${d.accounts.size} บัญชี)") { onOpen(Page.Accounts) }
+                MenuRow(Icons.Outlined.EventRepeat, "แม่แบบแผนบิล", "รายการที่เกิดทุกรอบ (${d.billTemplates.size} แม่แบบ)") { onOpen(Page.Templates) }
+                Spacer(Modifier.height(4.dp))
+                Text("Shopee · พอร์ต · หมวดหมู่ · ตั้งค่า 60/40 · แจ้งเตือน มาใน Phase 4", color = DanshaColors.Muted, fontSize = 12.sp)
+            }
+        }
         item {
             Card {
                 SectionLabel("ข้อมูล")
