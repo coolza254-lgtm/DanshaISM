@@ -46,6 +46,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -118,38 +120,65 @@ fun SectionLabel(text: String) {
     Text(text, color = DanshaColors.Muted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
 }
 
-/** วงกลมสีพร้อมตัวย่อของบัญชี (K, KTB, BBL, TM, G, PN, EX, SP …) */
+/** สีประจำแบรนด์ + ตัวย่อ (วาดเอง ไม่ใช่โลโก้จริง) */
+data class BrandStyle(val short: String, val bg: androidx.compose.ui.graphics.Color, val fg: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.White)
+
+private val BRAND_STYLES: List<Pair<List<String>, BrandStyle>> = listOf(
+    listOf("ascend paynext extra") to BrandStyle("EX", androidx.compose.ui.graphics.Color(0xFF4B2A7B)),
+    listOf("ascend paynext", "paynext") to BrandStyle("PN", androidx.compose.ui.graphics.Color(0xFF7A3FB8)),
+    listOf("k-bank", "kbank", "kasikorn", "กสิกร") to BrandStyle("K", androidx.compose.ui.graphics.Color(0xFF138F2D)),
+    listOf("krungthai", "ktb", "กรุงไทย") to BrandStyle("KTB", androidx.compose.ui.graphics.Color(0xFF1BA5E1)),
+    listOf("bangkok bank", "bbl", "กรุงเทพ") to BrandStyle("BBL", androidx.compose.ui.graphics.Color(0xFF1E4598)),
+    listOf("truemoney", "ทรูมันนี่") to BrandStyle("TM", androidx.compose.ui.graphics.Color(0xFFFF8300)),
+    listOf("g-wallet", "เป๋าตัง", "paotang") to BrandStyle("G", androidx.compose.ui.graphics.Color(0xFF1C64F2)),
+    listOf("shopee", "spaylater") to BrandStyle("SP", androidx.compose.ui.graphics.Color(0xFFEE4D2D)),
+    listOf("scb", "ไทยพาณิชย์") to BrandStyle("SCB", androidx.compose.ui.graphics.Color(0xFF4E2A84)),
+    listOf("krungsri", "กรุงศรี") to BrandStyle("KMA", androidx.compose.ui.graphics.Color(0xFFFEC43B), androidx.compose.ui.graphics.Color(0xFF4A3A00)),
+    listOf("ttb", "ทีทีบี") to BrandStyle("ttb", androidx.compose.ui.graphics.Color(0xFF0050F0)),
+    listOf("gsb", "ออมสิน") to BrandStyle("GSB", androidx.compose.ui.graphics.Color(0xFFEB198D)),
+    listOf("line bk", "line bank") to BrandStyle("LB", androidx.compose.ui.graphics.Color(0xFF06C755)),
+    listOf("dime") to BrandStyle("D!", androidx.compose.ui.graphics.Color(0xFF1A1A1A)),
+)
+
+/** แบรนด์ของบัญชี: จาก icon "brand:ชื่อ" ก่อน แล้วค่อยเดาจากชื่อบัญชี */
+fun brandOf(a: Account?): BrandStyle? {
+    if (a == null) return null
+    val key = if (a.icon.startsWith("brand:")) a.icon.removePrefix("brand:").trim().lowercase() else if (a.icon.isBlank()) a.name.lowercase() else return null
+    return BRAND_STYLES.firstOrNull { (names, _) -> names.any { key.startsWith(it) || key.contains(it) } }?.second
+}
+
+/** icon "img:<base64>" = รูปที่ผู้ใช้เลือกเอง */
+fun isImageIcon(icon: String) = icon.startsWith("img:")
+
+/** ไอคอนบัญชีแบบวงกลม: รูปที่เลือกเอง > สีแบรนด์ > อีโมจิ > ตัวอักษรแรก */
 @Composable
 fun AccountBadge(account: Account?, size: Int = 36) {
-    val label = accountShort(account)
+    val icon = account?.icon.orEmpty()
+    if (isImageIcon(icon)) {
+        val bmp = remember(icon) {
+            runCatching {
+                val bytes = android.util.Base64.decode(icon.removePrefix("img:"), android.util.Base64.DEFAULT)
+                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+            }.getOrNull()
+        }
+        if (bmp != null) {
+            androidx.compose.foundation.Image(bmp, contentDescription = null, modifier = Modifier.size(size.dp).clip(CircleShape), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+            return
+        }
+    }
+    val brand = brandOf(account)
+    val label = brand?.short ?: accountShort(account)
     Box(
-        Modifier.size(size.dp).background(tint(account?.color.orEmpty()), CircleShape),
+        Modifier.size(size.dp).background(brand?.bg ?: tint(account?.color.orEmpty()), CircleShape),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, fontSize = (if (label.length >= 3) size / 3.4 else size / 2.6).sp, fontWeight = FontWeight.Bold, color = DanshaColors.Ink)
+        Text(label, fontSize = (if (label.length >= 3) size / 3.4 else size / 2.4).sp, fontWeight = FontWeight.Bold, color = brand?.fg ?: DanshaColors.Ink)
     }
 }
 
-private val BRAND_SHORT = mapOf(
-    "k-bank" to "K", "kbank" to "K", "kasikorn" to "K",
-    "krungthai next" to "KTB", "krungthai" to "KTB", "ktb" to "KTB",
-    "bangkok bank" to "BBL", "bbl" to "BBL",
-    "truemoney wallet" to "TM", "truemoney" to "TM",
-    "g-wallet" to "G", "เป๋าตัง" to "G",
-    "ascend paynext extra" to "EX",
-    "ascend paynext" to "PN",
-    "shopee paylater" to "SP", "spaylater" to "SP",
-    "scb" to "SCB", "krungsri" to "KMA", "ttb" to "ttb",
-)
-
 fun accountShort(a: Account?): String {
     if (a == null) return "?"
-    val brand = a.icon.removePrefix("brand:").trim().lowercase()
-    if (a.icon.startsWith("brand:")) {
-        BRAND_SHORT[brand]?.let { return it }
-    }
-    if (a.icon.isNotBlank() && !a.icon.startsWith("brand:")) return a.icon
-    BRAND_SHORT.entries.firstOrNull { a.name.lowercase().startsWith(it.key) }?.let { return it.value }
+    if (a.icon.isNotBlank() && !a.icon.startsWith("brand:") && !isImageIcon(a.icon)) return a.icon
     return a.name.take(1).uppercase()
 }
 

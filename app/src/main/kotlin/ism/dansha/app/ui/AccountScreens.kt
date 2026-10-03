@@ -14,7 +14,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
+import kotlinx.coroutines.launch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -42,6 +47,8 @@ private val BRANDS = listOf(
     "" to "— ไม่ใช้ —", "brand:K-Bank" to "K-Bank (K)", "brand:Krungthai NEXT" to "Krungthai (KTB)", "brand:Bangkok Bank" to "Bangkok Bank (BBL)",
     "brand:TrueMoney Wallet" to "TrueMoney (TM)", "brand:G-Wallet" to "G-Wallet (G)", "brand:Ascend PayNext" to "PayNext (PN)",
     "brand:Ascend PayNext Extra" to "PayNext Extra (EX)", "brand:Shopee PayLater" to "SPayLater (SP)",
+    "brand:SCB" to "SCB", "brand:Krungsri" to "Krungsri (KMA)", "brand:ttb" to "ttb", "brand:GSB" to "ออมสิน (GSB)",
+    "brand:LINE BK" to "LINE BK (LB)", "brand:Dime" to "Dime! (D!)",
 )
 
 /** รายชื่อบัญชีทั้งหมด (รวมที่ปิดใช้) + ยอด */
@@ -101,6 +108,14 @@ fun AccountEditor(d: DanshaData, existing: Account?, vm: MainViewModel, onClose:
     var rate by remember { mutableStateOf(amountText(e?.annual_rate)) }
     var error by remember { mutableStateOf<String?>(null) }
     val credit = type == "revolving_credit"
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) scope.launch {
+            val img = IconImage.fromUri(context, uri)
+            if (img != null) icon = img else error = "อ่านรูปไม่ได้"
+        }
+    }
 
     fun save() {
         val row = (e ?: Account(id = "")).copy(
@@ -153,11 +168,21 @@ fun AccountEditor(d: DanshaData, existing: Account?, vm: MainViewModel, onClose:
                 )
             }
         }
-        Picker("ไอคอนแบรนด์", BRANDS, if (BRANDS.any { it.first == icon }) icon else "", { icon = it })
-        if (!icon.startsWith("brand:")) TextInput("หรือไอคอนเอง (อีโมจิ)", icon, { icon = it.take(4) })
+        Text("ไอคอน", fontWeight = FontWeight.Medium)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("ตัวอย่าง  ")
-            AccountBadge(Account(id = "", name = name, icon = icon, color = color))
+            AccountBadge(Account(id = "", name = name, icon = icon, color = color), 56)
+            Spacer(Modifier.width(12.dp))
+            Column {
+                OutlinedButton(onClick = {
+                    pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }) { Text(if (isImageIcon(icon)) "เปลี่ยนรูป" else "เลือกรูปจากเครื่อง") }
+                if (isImageIcon(icon)) TextButton(onClick = { icon = "" }) { Text("ลบรูป ใช้สีแบรนด์แทน") }
+            }
+        }
+        Note("แคปโลโก้จากแอพธนาคารแล้วเลือกมาได้เลย แอพจะตัดเป็นวงกลมให้")
+        if (!isImageIcon(icon)) {
+            Picker("หรือใช้สีแบรนด์", BRANDS, if (BRANDS.any { it.first == icon }) icon else "", { icon = it })
+            if (!icon.startsWith("brand:")) TextInput("หรืออีโมจิ (ว่าง = เดาจากชื่อบัญชี)", icon, { icon = it.take(4) })
         }
         AmountField("ลำดับ", sort, { sort = it.filter(Char::isDigit) })
         SwitchRow("เปิดใช้งาน", active, { active = it }, sub = "ปิดแล้วจะไม่แสดงในฟอร์ม และไม่นับรวมในเงินที่มีตอนนี้")
