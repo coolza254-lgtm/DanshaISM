@@ -5,6 +5,8 @@
 - ข้อมูลอยู่ในเครื่องเท่านั้น (Room/SQLite) ใช้ได้แม้ออฟไลน์ ไม่มีเซิร์ฟเวอร์ ไม่มี token
 - สำรองข้อมูล: Android Auto Backup + ส่งออก/นำเข้าไฟล์ `dansha-data/1` (JSON)
 - อัปเดตแอพจากในแอพ: อ่าน GitHub Releases ของ repo นี้ → ดาวน์โหลด APK → เปิดตัวติดตั้งของ Android
+- แจ้งเตือนในเครื่อง (WorkManager): ครบกำหนดหนี้/บิล + สรุปรายวัน, ปุ่มแชร์สรุปผ่าน share sheet
+- อัตราแลกเปลี่ยนดึงเองวันละครั้ง (open.er-api.com สำรองด้วย frankfurter.app) กรอกเองทับได้
 
 **repo นี้มีแต่โค้ด** ห้าม commit ข้อมูลส่วนตัว (`dansha-data-*.json`), keystore หรือ token (`.gitignore` กันไว้แล้ว)
 
