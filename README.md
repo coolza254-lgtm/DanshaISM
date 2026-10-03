@@ -14,7 +14,8 @@
 |---|---|
 | `core/` | Kotlin ล้วน (ไม่พึ่ง Android): แถวข้อมูลทุกตาราง, อ่าน/เขียนไฟล์ `dansha-data/1`, วันที่/รอบเงินเดือน (เวลาไทยเสมอ) |
 | `core/.../engine/` | ตัวคำนวณทั้งหมด port จากระบบเดิม: หนี้ Ascend (`DebtEngine`), SPayLater, 60/40, แผนบิล, ภาพรวมรายรอบ, เช็คก่อนซื้อ, พอร์ต, แจ้งเตือน, การแก้ไขข้อมูล (`Store`) |
-| `app/` | แอพ Android: Room, หน้าจอ Compose, ตัวอัปเดต |
+| `app/` | แอพ Android: Room, หน้าจอ Compose, ตัวอัปเดต — ทุกการแก้ไขผ่าน `Repository.edit { Store… }` แล้วบันทึกทั้งก้อน |
+| `app/.../ui/Components.kt` | ชิ้นส่วนฟอร์มกลาง (FormPage, AmountField, DateField, Picker, ChoiceChips …) — เปลี่ยนหน้าตาทั้งแอพที่นี่ |
 | `reference/` | ระบบเดิม (JavaScript) ใช้เป็นตัวเทียบผลในชุดทดสอบ + ข้อมูลสมมติ `sample-data.json` |
 
 ## หลักการคำนวณ
@@ -41,6 +42,10 @@
 ```
 
 ## Release
+
+สร้าง Release (แอพเห็นเวอร์ชันใหม่) เมื่อกด **Run workflow** หรือ commit บน branch หลักที่มีคำว่า `[release]`
+push ปกติแค่ทดสอบ + build ไม่รบกวนแอพในมือถือ
+
 
 GitHub Actions (`.github/workflows/build.yml`) ทดสอบ + สร้าง APK ทุก push
 และสร้าง Release ที่เซ็นแล้ว (`v1.0.<เลข build>`) เมื่อ push เข้า branch หลัก หรือกด **Run workflow**
