@@ -55,4 +55,4 @@ GitHub Actions (`.github/workflows/build.yml`) ทดสอบ + สร้าง
 
 ## ฟอนต์
 
-แอพฝังฟอนต์ [Noto Sans Thai](https://fonts.google.com/noto/specimen/Noto+Sans+Thai) (`app/src/main/res/font/`) ใช้สัญญาอนุญาต SIL Open Font License 1.1
+แอพฝังฟอนต์ [Sarabun](https://fonts.google.com/specimen/Sarabun) (เนื้อหาและตัวเลข) และ [Mali](https://fonts.google.com/specimen/Mali) (หัวข้อลายมือ) ใน `app/src/main/res/font/` ทั้งคู่ใช้สัญญาอนุญาต SIL Open Font License 1.1

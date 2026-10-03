@@ -100,7 +100,7 @@ fun FormPage(
 fun TextInput(label: String, value: String, onChange: (String) -> Unit, modifier: Modifier = Modifier, singleLine: Boolean = true, placeholder: String? = null) {
     OutlinedTextField(
         value = value, onValueChange = onChange, label = { Text(label) }, singleLine = singleLine,
-        placeholder = placeholder?.let { { Text(it) } }, modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
+        placeholder = placeholder?.let { { Text(it) } }, modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp),
     )
 }
 
@@ -116,7 +116,7 @@ fun AmountField(label: String, value: String, onChange: (String) -> Unit, modifi
         supportingText = supporting?.let { { Text(it) } },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(8.dp),
     )
 }
 
@@ -132,7 +132,7 @@ fun DateField(label: String, value: String, onChange: (String) -> Unit, modifier
     Box(modifier.fillMaxWidth()) {
         OutlinedTextField(
             value = if (value.isEmpty()) "" else thaiDate(value), onValueChange = {}, readOnly = true,
-            label = { Text(label) }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
+            label = { Text(label) }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp),
         )
         // ชั้นโปร่งใสรับการแตะ (ช่องที่ readOnly ไม่ส่ง onClick)
         Box(Modifier.matchParentSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { open = true })
@@ -168,7 +168,7 @@ fun <T> Picker(label: String, options: List<Pair<T, String>>, selected: T, onSel
             value = options.firstOrNull { it.first == selected }?.second.orEmpty(), onValueChange = {}, readOnly = true,
             label = { Text(label) }, singleLine = true,
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(), shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(), shape = RoundedCornerShape(8.dp),
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { (v, text) ->
@@ -188,10 +188,10 @@ fun <T> ChoiceChips(options: List<Pair<T, String>>, selected: T?, onSelect: (T) 
                 selected = v == selected, onClick = { onSelect(v) }, label = { Text(text) },
                 shape = RoundedCornerShape(50),
                 colors = FilterChipDefaults.filterChipColors(
-                    containerColor = p.surface, labelColor = p.ink,
-                    selectedContainerColor = p.primary, selectedLabelColor = p.onPrimary,
+                    containerColor = p.card, labelColor = p.ink,
+                    selectedContainerColor = p.ink, selectedLabelColor = p.card,
                 ),
-                border = null,
+                border = androidx.compose.foundation.BorderStroke(1.5.dp, p.ink.copy(alpha = if (v == selected) 1f else 0.5f)),
             )
         }
     }
@@ -202,7 +202,7 @@ fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit, sub:
     Row(Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(label)
-            if (sub != null) Text(sub, color = DanshaColors.Muted, fontSize = 12.sp)
+            if (sub != null) Text(sub, color = DanshaColors.Muted, fontSize = 13.sp)
         }
         Switch(checked = checked, onCheckedChange = onChange)
     }

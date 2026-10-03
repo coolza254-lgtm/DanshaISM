@@ -86,10 +86,10 @@ val LocalOpenMore = androidx.compose.runtime.staticCompositionLocalOf<(() -> Uni
 @Composable
 fun ScreenTitle(title: String, subtitle: String? = null, actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {}) {
     val openMore = LocalOpenMore.current
-    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 18.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(start = 36.dp, end = 8.dp, top = 18.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(title, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = DanshaColors.Ink)
-            if (subtitle != null) Text(subtitle, color = DanshaColors.Muted, fontSize = 13.sp)
+            Text(title, fontFamily = Hand, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = DanshaColors.Primary, lineHeight = 34.sp)
+            if (subtitle != null) Text(subtitle, color = DanshaColors.Muted, fontSize = 14.sp)
         }
         actions()
         if (openMore != null) {
@@ -100,24 +100,22 @@ fun ScreenTitle(title: String, subtitle: String? = null, actions: @Composable an
     }
 }
 
-/** การ์ดมุมโค้ง พื้นขาว/เทาเข้ม มีเงาบางๆ */
+/** การ์ดกระดาษแปะ: ขอบหมึก + เงาเยื้อง */
 @Composable
 fun Card(modifier: Modifier = Modifier, padding: androidx.compose.ui.unit.Dp = 16.dp, color: androidx.compose.ui.graphics.Color? = null, content: @Composable () -> Unit) {
     val p = LocalPalette.current
-    val shape = RoundedCornerShape(20.dp)
     Column(
         modifier
-            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .padding(start = 36.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)
             .fillMaxWidth()
-            .then(if (p.dark) Modifier.border(1.dp, p.line, shape) else Modifier.shadow(2.dp, shape, ambientColor = p.primary.copy(alpha = 0.25f), spotColor = p.primary.copy(alpha = 0.25f)))
-            .background(color ?: p.card, shape)
+            .paperCard(p, color ?: p.card)
             .padding(padding)
     ) { content() }
 }
 
 @Composable
 fun SectionLabel(text: String) {
-    Text(text, color = DanshaColors.Muted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+    Text(text, color = DanshaColors.Muted, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
 }
 
 /** สีประจำแบรนด์ + ตัวย่อ (วาดเอง ไม่ใช่โลโก้จริง) */
@@ -252,7 +250,7 @@ fun MoreScreen(d: DanshaData, vm: MainViewModel, onOpen: (Page) -> Unit) {
                 Spacer(Modifier.height(4.dp))
                 Text(
                     "ข้อมูลสำรองอัตโนมัติไปที่บัญชี Google ของเครื่องด้วย (Android Auto Backup)",
-                    color = DanshaColors.Muted, fontSize = 12.sp,
+                    color = DanshaColors.Muted, fontSize = 13.sp,
                 )
             }
         }
@@ -296,7 +294,7 @@ private fun MenuRow(icon: ImageVector, title: String, subtitle: String, onClick:
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(title)
-            Text(subtitle, color = DanshaColors.Muted, fontSize = 12.sp)
+            Text(subtitle, color = DanshaColors.Muted, fontSize = 13.sp)
         }
     }
 }

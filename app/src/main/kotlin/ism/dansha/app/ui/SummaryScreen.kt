@@ -86,22 +86,22 @@ fun SummaryScreen(d: DanshaData, vm: MainViewModel, header: @Composable () -> Un
             Card {
                 Row {
                     Column(Modifier.weight(1f)) {
-                        Text("รายรับ", color = DanshaColors.Muted, fontSize = 12.sp)
+                        Text("รายรับ", color = DanshaColors.Muted, fontSize = 13.sp)
                         Text(money(s.income), color = DanshaColors.Positive, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     }
                     Column(Modifier.weight(1f)) {
-                        Text("รายจ่าย", color = DanshaColors.Muted, fontSize = 12.sp)
+                        Text("รายจ่าย", color = DanshaColors.Muted, fontSize = 13.sp)
                         Text(money(s.expense), color = DanshaColors.Negative, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     }
                     Column(Modifier.weight(1f)) {
-                        Text("สุทธิ", color = DanshaColors.Muted, fontSize = 12.sp)
+                        Text("สุทธิ", color = DanshaColors.Muted, fontSize = 13.sp)
                         Text(money(s.net), color = if (s.net < 0) DanshaColors.Negative else DanshaColors.Ink, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     }
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
                     "จ่ายเฉลี่ยวันละ ${money(s.avgExpensePerDay)}" + if (s.govSubsidy > 0) " · รัฐช่วยจ่าย 60/40 ${money(s.govSubsidy)}" else "",
-                    color = DanshaColors.Muted, fontSize = 12.sp,
+                    color = DanshaColors.Muted, fontSize = 13.sp,
                 )
             }
         }
@@ -126,7 +126,7 @@ fun SummaryScreen(d: DanshaData, vm: MainViewModel, header: @Composable () -> Un
         val categories = d.categories.associateBy { it.id }
         s.transactions.groupBy { it.date }.forEach { (date, list) ->
             item(key = "h_$date") {
-                Text(thaiDate(date), Modifier.fillMaxWidth().background(DanshaColors.Surface).padding(horizontal = 20.dp, vertical = 6.dp), fontSize = 12.sp, color = DanshaColors.Muted)
+                DayHeader(thaiDate(date))
             }
             list.forEach { t -> item(key = t.id) { TransactionRow(t, accounts, categories) { editing = t } } }
         }
@@ -151,7 +151,7 @@ private fun CategoryBar(c: CategoryTotal, barColor: androidx.compose.ui.graphics
         if (open) c.children.forEach { ch ->
             Row(Modifier.padding(start = 34.dp, top = 4.dp)) {
                 Text("└ ${ch.name}", Modifier.weight(1f), color = DanshaColors.Muted, fontSize = 13.sp)
-                Text("${money(ch.amount)} · ${ch.share}%", color = DanshaColors.Muted, fontSize = 12.sp)
+                Text("${money(ch.amount)} · ${ch.share}%", color = DanshaColors.Muted, fontSize = 13.sp)
             }
         }
     }
@@ -179,10 +179,10 @@ private fun DailyChart(days: List<DayTotal>) {
     }
     if (days.isNotEmpty()) {
         Row(Modifier.fillMaxWidth()) {
-            Text(thaiDate(days.first().date), Modifier.weight(1f), color = DanshaColors.Muted, fontSize = 11.sp)
-            Text("สูงสุด ${money(max)}", color = DanshaColors.Muted, fontSize = 11.sp)
+            Text(thaiDate(days.first().date), Modifier.weight(1f), color = DanshaColors.Muted, fontSize = 13.sp)
+            Text("สูงสุด ${money(max)}", color = DanshaColors.Muted, fontSize = 13.sp)
             Spacer(Modifier.weight(1f))
-            Text(thaiDate(days.last().date), color = DanshaColors.Muted, fontSize = 11.sp)
+            Text(thaiDate(days.last().date), color = DanshaColors.Muted, fontSize = 13.sp)
         }
     }
 }

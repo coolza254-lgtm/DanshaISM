@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.border
 import ism.dansha.app.MainViewModel
 import ism.dansha.core.DanshaData
 import ism.dansha.core.Dates
@@ -75,7 +76,7 @@ fun TransactionsScreen(d: DanshaData, vm: MainViewModel, header: @Composable () 
             item { ScreenTitle("รายการ") }
             item { header() }
             item {
-                Column(Modifier.padding(horizontal = 16.dp)) {
+                Column(Modifier.padding(start = 36.dp, end = 16.dp)) {
                     TextInput("ค้นหา (โน้ต หมวด บัญชี ยอด)", query, { query = it })
                     if (!searching) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -83,24 +84,22 @@ fun TransactionsScreen(d: DanshaData, vm: MainViewModel, header: @Composable () 
                             val (rs, re) = Dates.payCycleRange(cycle, startDay)
                             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("รอบ ${cycle.substring(8)}${if (cycle == current) " (รอบนี้)" else ""}", fontWeight = FontWeight.SemiBold)
-                                Text("${thaiDate(rs.toString())} – ${thaiDate(re.toString())}", color = DanshaColors.Muted, fontSize = 12.sp)
+                                Text("${thaiDate(rs.toString())} – ${thaiDate(re.toString())}", color = DanshaColors.Muted, fontSize = 13.sp)
                             }
                             IconButton(onClick = { cycle = Outlook.shiftCycle(cycle, 1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "รอบถัดไป") }
                         }
                     }
                     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                        Text("รับ ${formatMoney(income)}", Modifier.weight(1f), color = DanshaColors.Positive, fontSize = 13.sp)
-                        Text("จ่าย ${formatMoney(expense)}", Modifier.weight(1f), color = DanshaColors.Negative, fontSize = 13.sp, textAlign = TextAlign.End)
+                        Text("รับ ${formatMoney(income)}", Modifier.weight(1f), color = DanshaColors.Positive, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Text("จ่าย ${formatMoney(expense)}", Modifier.weight(1f), color = DanshaColors.Negative, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.End)
                     }
                 }
             }
-            if (rows.isEmpty()) item { Text(if (searching) "ไม่พบรายการ" else "ยังไม่มีรายการในรอบนี้", Modifier.padding(20.dp), color = DanshaColors.Muted) }
+            if (rows.isEmpty()) item { Text(if (searching) "ไม่พบรายการ" else "ยังไม่มีรายการในรอบนี้", Modifier.padding(start = 36.dp, end = 16.dp, top = 16.dp, bottom = 16.dp), color = DanshaColors.Muted) }
             rows.groupBy { it.date }.forEach { (date, list) ->
                 item(key = "h_$date") {
-                    Text(
-                        thaiDate(date), Modifier.fillMaxWidth().background(DanshaColors.Surface).padding(horizontal = 20.dp, vertical = 6.dp),
-                        fontSize = 12.sp, color = DanshaColors.Muted, fontWeight = FontWeight.Medium,
-                    )
+                    val net = list.sumOf { t -> when (t.type) { "income" -> t.amount ?: BigDecimal.ZERO; "expense" -> (t.amount ?: BigDecimal.ZERO).negate(); else -> BigDecimal.ZERO } }
+                    DayHeader(thaiDate(date), (if (net.signum() < 0) "−" else if (net.signum() > 0) "+" else "") + formatMoney(net.abs()))
                 }
                 items(list, key = { it.id }) { t ->
                     TransactionRow(t, accounts, categories) { editing = t }
@@ -113,21 +112,39 @@ fun TransactionsScreen(d: DanshaData, vm: MainViewModel, header: @Composable () 
     editing?.let { t -> TransactionEditor(d, t, vm) { editing = null } }
 }
 
+/** แถวในสมุด: (วันที่) · วงอักษรหมวด · โน้ต/บัญชี · ยอด */
 @Composable
-fun TransactionRow(t: Transaction, accounts: Map<String, ism.dansha.core.Account>, categories: Map<String, ism.dansha.core.Category>, onClick: () -> Unit) {
+fun TransactionRow(
+    t: Transaction,
+    accounts: Map<String, ism.dansha.core.Account>,
+    categories: Map<String, ism.dansha.core.Category>,
+    showDate: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val p = LocalPalette.current
     val cat = categories[t.subcategory_id.ifEmpty { t.category_id }] ?: categories[t.category_id]
+    val main = categories[t.category_id] ?: cat
     val (sign, color) = when (t.type) {
-        "income" -> "+" to DanshaColors.Positive
-        "expense" -> "−" to DanshaColors.Negative
-        else -> "" to DanshaColors.Ink
+        "income" -> "+" to p.positive
+        "expense" -> "−" to p.negative
+        else -> "" to p.ink
     }
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(36.dp).background(tint(cat?.color.orEmpty()), CircleShape), contentAlignment = Alignment.Center) {
-            Text(if (t.type == "transfer") "⇄" else cat?.icon ?: "•", fontSize = 16.sp)
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 36.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (showDate) {
+            Text(shortThaiDate(t.date), Modifier.width(48.dp), fontSize = 13.sp, color = p.muted)
         }
-        Spacer(Modifier.width(12.dp))
+        Box(
+            Modifier.size(32.dp).background(tint(main?.color.orEmpty()), CircleShape).border(1.3.dp, p.ink.copy(alpha = 0.8f), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(if (t.type == "transfer") "⇄" else categoryMark(main?.name ?: "•"), fontFamily = Hand, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = p.ink)
+        }
+        Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(t.note.ifEmpty { cat?.name ?: if (t.type == "transfer") "โอน" else "-" }, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(t.note.ifEmpty { cat?.name ?: if (t.type == "transfer") "โอน" else "-" }, fontSize = 16.sp, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val sub = buildString {
                 append(accounts[t.account_id]?.name ?: "?")
                 if (t.type == "transfer") append(" → ").append(accounts[t.to_account_id]?.name ?: "?")
@@ -135,9 +152,28 @@ fun TransactionRow(t: Transaction, accounts: Map<String, ism.dansha.core.Account
                 val gov = t.gov_subsidy
                 if (gov != null && gov.signum() > 0) append(" · 60/40 รัฐจ่าย ").append(formatMoney(gov))
             }
-            Text(sub, color = DanshaColors.Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(sub, color = p.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Text("$sign${formatMoney(t.amount)}", color = color, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.width(8.dp))
+        Text("$sign${formatMoney(t.amount)}", color = color, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
     }
-    HorizontalDivider(Modifier.padding(start = 68.dp), color = DanshaColors.Line)
+}
+
+/** หัววันที่แบบไฮไลต์ปากกาเหลือง */
+@Composable
+fun DayHeader(text: String, right: String? = null) {
+    val p = LocalPalette.current
+    Row(Modifier.fillMaxWidth().padding(start = 36.dp, end = 16.dp, top = 12.dp, bottom = 2.dp), verticalAlignment = Alignment.Bottom) {
+        Text(text, Modifier.background(p.highlight).padding(horizontal = 6.dp), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = p.ink)
+        Spacer(Modifier.weight(1f))
+        if (right != null) Text(right, fontSize = 14.sp, color = p.muted)
+    }
+}
+
+private val TH_MONTH_SHORT = listOf("ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.")
+
+/** "2026-10-02" → "2 ต.ค." */
+fun shortThaiDate(iso: String): String {
+    val parts = iso.split("-").mapNotNull { it.toIntOrNull() }
+    return if (parts.size < 3) iso else "${parts[2]} ${TH_MONTH_SHORT[parts[1] - 1]}"
 }

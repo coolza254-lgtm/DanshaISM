@@ -39,7 +39,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -99,7 +100,7 @@ fun DanshaRoot(vm: MainViewModel) {
             snackbarHost = { SnackbarHost(snackbar) },
             bottomBar = { BottomBar(tab, { tab = it }, onAdd = { if (hasData) adding = true else vm.toast("นำเข้าข้อมูลหรือกดเริ่มใหม่ก่อน") }) },
         ) { padding ->
-            Box(Modifier.fillMaxSize().padding(padding)) {
+            Box(Modifier.fillMaxSize().padding(padding).notebookPaper(LocalPalette.current)) {
                 val d = data
                 if (d == null) {
                     CircularProgressIndicator(Modifier.align(Alignment.Center))
@@ -133,21 +134,23 @@ fun DanshaRoot(vm: MainViewModel) {
     pending?.let { ImportConfirmDialog(it, data, vm) }
 }
 
-/** แถบล่าง: 4 แท็บ + ปุ่ม ➕ กลาง */
+/** แถบล่าง: แถบกระดาษ 4 แท็บ + ปุ่มปากกา ➕ กลาง */
 @Composable
 private fun BottomBar(tab: Tab, onTab: (Tab) -> Unit, onAdd: () -> Unit) {
     val p = LocalPalette.current
-    Box(Modifier.fillMaxWidth().background(p.card).navigationBarsPadding()) {
-        Row(Modifier.fillMaxWidth().height(64.dp), verticalAlignment = Alignment.CenterVertically) {
+    Box(Modifier.fillMaxWidth().background(p.surface).navigationBarsPadding()) {
+        Box(Modifier.fillMaxWidth().height(1.5.dp).background(p.ink.copy(alpha = if (p.dark) 0.5f else 1f)))
+        Row(Modifier.fillMaxWidth().height(66.dp), verticalAlignment = Alignment.CenterVertically) {
             val tabs = Tab.entries
             tabs.take(2).forEach { t -> TabItem(t, t == tab, Modifier.weight(1f)) { onTab(t) } }
             Box(Modifier.weight(1f))
             tabs.drop(2).forEach { t -> TabItem(t, t == tab, Modifier.weight(1f)) { onTab(t) } }
         }
         Box(
-            Modifier.align(Alignment.TopCenter).offset(y = (-14).dp).size(58.dp)
-                .shadow(6.dp, CircleShape, ambientColor = p.primary, spotColor = p.primary)
+            Modifier.align(Alignment.TopCenter).offset(y = (-16).dp).size(60.dp)
+                .drawBehind { drawCircle(p.ink.copy(alpha = 0.2f), center = center.copy(x = center.x + 2.dp.toPx(), y = center.y + 3.dp.toPx())) }
                 .background(p.primary, CircleShape)
+                .border(2.dp, p.ink, CircleShape)
                 .clickable(onClick = onAdd),
             contentAlignment = Alignment.Center,
         ) { Icon(Icons.Filled.Add, contentDescription = "เพิ่มรายการ", tint = p.onPrimary, modifier = Modifier.size(30.dp)) }
@@ -161,11 +164,12 @@ private fun TabItem(t: Tab, selected: Boolean, modifier: Modifier, onClick: () -
         modifier.fillMaxSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
     ) {
-        Box(
-            Modifier.background(if (selected) p.primarySoft else Color.Transparent, RoundedCornerShape(50))
-                .padding(horizontal = 14.dp, vertical = 3.dp),
-        ) { Icon(t.icon, contentDescription = null, tint = if (selected) p.primary else p.muted, modifier = Modifier.size(22.dp)) }
-        Text(t.label, fontSize = 11.sp, color = if (selected) p.ink else p.muted, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+        Icon(t.icon, contentDescription = null, tint = if (selected) p.ink else p.muted, modifier = Modifier.size(22.dp))
+        Text(
+            t.label,
+            Modifier.background(if (selected) p.highlight else Color.Transparent, RoundedCornerShape(3.dp)).padding(horizontal = 8.dp),
+            fontSize = 13.sp, color = if (selected) p.ink else p.muted, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+        )
     }
 }
 

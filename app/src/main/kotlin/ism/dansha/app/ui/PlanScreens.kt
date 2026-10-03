@@ -1,6 +1,11 @@
 package ism.dansha.app.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -62,12 +67,12 @@ fun PlanScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
     LazyColumn(Modifier.fillMaxSize()) {
         item { ScreenTitle("แผนบิล") }
         item {
-            Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(start = 28.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { cycle = Outlook.shiftCycle(cycle, -1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "รอบก่อน") }
                 val (rs, re) = Dates.payCycleRange(cycle, startDay)
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("รอบ ${cycle.substring(8)}${if (cycle == current) " (รอบนี้)" else ""}", fontWeight = FontWeight.SemiBold)
-                    Text("${thaiDate(rs.toString())} – ${thaiDate(re.toString())}", color = DanshaColors.Muted, fontSize = 12.sp)
+                    Text("${thaiDate(rs.toString())} – ${thaiDate(re.toString())}", color = DanshaColors.Muted, fontSize = 13.sp)
                 }
                 IconButton(onClick = { cycle = Outlook.shiftCycle(cycle, 1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "รอบถัดไป") }
             }
@@ -90,7 +95,7 @@ fun PlanScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
             }
         }
         item {
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.padding(start = 36.dp, end = 16.dp, top = 4.dp, bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = {
                     vm.edit(onOk = { list: List<Bill> -> vm.toast(if (list.isEmpty()) "ไม่มีแม่แบบใหม่ให้สร้าง" else "สร้างจากแม่แบบ ${list.size} รายการ") }) { generateCycle(cycle) }
                 }) { Text("สร้างจากแม่แบบ") }
@@ -98,12 +103,12 @@ fun PlanScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
                 OutlinedButton(onClick = onOpenTemplates) { Text("แม่แบบ") }
             }
         }
-        if (rows.isEmpty()) item { Text("ยังไม่มีแผนในรอบนี้ — กด \"สร้างจากแม่แบบ\" หรือ \"+ เพิ่ม\"", Modifier.padding(20.dp), color = DanshaColors.Muted) }
+        if (rows.isEmpty()) item { Text("ยังไม่มีแผนในรอบนี้ — กด \"สร้างจากแม่แบบ\" หรือ \"+ เพิ่ม\"", Modifier.padding(start = 36.dp, end = 16.dp, top = 16.dp, bottom = 16.dp), color = DanshaColors.Muted) }
         GROUPS.forEach { (g, label) ->
             val list = rows.filter { it.group == g }
             if (list.isNotEmpty()) {
                 item(key = "g_$g") {
-                    Text(label, Modifier.padding(start = 20.dp, top = 14.dp, bottom = 4.dp), fontWeight = FontWeight.SemiBold)
+                    Text(label, Modifier.padding(start = 36.dp, top = 16.dp, bottom = 4.dp).background(LocalPalette.current.highlight).padding(horizontal = 6.dp), fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                 }
                 list.forEach { b -> item(key = b.id) { BillRow(d, b) { open = b } } }
             }
@@ -119,7 +124,7 @@ fun PlanScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
                                 Text(o.cycle.substring(8) + if (o.cycle == current) " (รอบนี้)" else "", fontSize = 14.sp)
                                 Text(
                                     "รับ ${money(o.income)} · แผน ${money(o.planned)} · หนี้ ${money(o.debtDue)}" + if (!o.fromPlan) " · จากแม่แบบ" else "",
-                                    color = DanshaColors.Muted, fontSize = 11.sp,
+                                    color = DanshaColors.Muted, fontSize = 13.sp,
                                 )
                             }
                             Text(money(o.remaining), color = if (o.remaining < 0) DanshaColors.Negative else DanshaColors.Ink, fontWeight = FontWeight.SemiBold)
@@ -145,25 +150,39 @@ private fun PlanLine(label: String, value: String, bold: Boolean = false, negati
 
 @Composable
 private fun BillRow(d: DanshaData, b: Bill, onClick: () -> Unit) {
+    val p = LocalPalette.current
     val paid = b.status == "paid"
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+    val late = !paid && b.due_date.isNotEmpty() && b.due_date < Dates.todayStr()
+    Row(
+        Modifier.padding(start = 36.dp, end = 16.dp, top = 4.dp, bottom = 4.dp).fillMaxWidth()
+            .paperCard(p, shadow = false).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // ช่องติ๊กแบบเขียนมือ: จ่ายแล้ว = ติ๊กเขียว
+        Box(
+            Modifier.size(24.dp).border(1.8.dp, if (paid) p.positive else p.ink, androidx.compose.foundation.shape.RoundedCornerShape(4.dp)),
+            contentAlignment = Alignment.Center,
+        ) { if (paid) Text("✓", color = p.positive, fontWeight = FontWeight.Bold, fontSize = 17.sp) }
+        androidx.compose.foundation.layout.Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(b.name, color = if (paid) DanshaColors.Muted else DanshaColors.Ink)
+            Text(
+                b.name, fontSize = 16.sp, color = if (paid) p.muted else p.ink,
+                textDecoration = if (paid) androidx.compose.ui.text.style.TextDecoration.LineThrough else null,
+            )
             val acc = d.accounts.firstOrNull { it.id == b.to_account_id }?.name
             Text(
                 listOfNotNull(
-                    if (paid) "จ่ายแล้ว ${thaiDate(b.paid_date)}" else b.due_date.takeIf { it.isNotEmpty() }?.let { "ครบ ${thaiDate(it)}" },
+                    if (paid) "จ่ายแล้ว ${thaiDate(b.paid_date)}" else b.due_date.takeIf { it.isNotEmpty() }?.let { "ครบ ${thaiDate(it)}" + if (late) " · เลยกำหนด" else "" },
                     acc?.let { "→ $it" },
                 ).joinToString(" · ").ifEmpty { "ไม่ระบุวัน" },
-                color = if (!paid && b.due_date.isNotEmpty() && b.due_date < Dates.todayStr()) DanshaColors.Negative else DanshaColors.Muted, fontSize = 12.sp,
+                color = if (late) p.negative else if (paid) p.positive else p.muted, fontSize = 14.sp,
             )
         }
         Text(
-            (if (paid) "✓ " else "") + formatMoney(if (paid) b.actual_amount else b.est_amount),
-            color = if (paid) DanshaColors.Positive else DanshaColors.Ink, fontWeight = FontWeight.SemiBold,
+            formatMoney(if (paid) b.actual_amount else b.est_amount),
+            color = if (paid) p.positive else p.ink, fontWeight = FontWeight.SemiBold, fontSize = 17.sp,
         )
     }
-    HorizontalDivider(Modifier.padding(start = 20.dp), color = DanshaColors.Line)
 }
 
 /** รายละเอียดบิล: จ่าย / ยกเลิกจ่าย / แก้ไข / ลบ */
@@ -300,7 +319,7 @@ fun TemplatesPage(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) {
                                     t.due_day?.let { "ทุกวันที่ $it" },
                                     d.accounts.firstOrNull { it.id == t.to_account_id }?.let { "ค่างวด ${it.name}" },
                                 ).joinToString(" · ").ifEmpty { "ไม่ระบุวัน" },
-                                color = DanshaColors.Muted, fontSize = 12.sp,
+                                color = DanshaColors.Muted, fontSize = 13.sp,
                             )
                         }
                         Text(formatMoney(t.est_amount))

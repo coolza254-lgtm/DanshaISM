@@ -116,6 +116,7 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
         onDismissRequest = onClose,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = p.card,
+        shape = RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp),
     ) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 16.dp)) {
             // ประเภท + ลบ
@@ -135,11 +136,11 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
             Text(if (useCopay) "ราคาเต็ม" else "จำนวนเงิน", color = p.muted, fontSize = 13.sp)
             Text(
                 "฿ " + (if (amount.isEmpty()) "0" else formatTyped(amount)),
-                fontSize = 40.sp, fontWeight = FontWeight.Bold, color = typeColor, maxLines = 1,
+                fontSize = 42.sp, fontWeight = FontWeight.Bold, color = typeColor, maxLines = 1,
             )
             if (eligible) {
                 Row(
-                    Modifier.fillMaxWidth().background(p.primarySoft, RoundedCornerShape(14.dp)).clickable { copay = !copay }.padding(horizontal = 12.dp, vertical = 6.dp),
+                    Modifier.fillMaxWidth().background(p.stickyBlue, RoundedCornerShape(6.dp)).border(1.5.dp, p.primary.copy(alpha = 0.6f), RoundedCornerShape(6.dp)).clickable { copay = !copay }.padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
@@ -148,7 +149,7 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
                         Text(
                             if (pv != null) "รัฐจ่าย ${formatMoney(pv.gov)} · จ่ายเอง ${formatMoney(pv.self)} · วันนี้เหลือ ${formatMoney(pv.leftToday)}"
                             else "กรอกราคาเต็ม แล้วแอพคิดส่วนที่รัฐจ่ายให้",
-                            fontSize = 12.sp, color = p.muted,
+                            fontSize = 13.sp, color = p.muted,
                         )
                     }
                     Switch(checked = copay, onCheckedChange = { copay = it })
@@ -178,11 +179,11 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Box(
-                                Modifier.size(40.dp).background(tint(c.color), CircleShape)
-                                    .then(if (sel) Modifier.border(2.dp, p.primary, CircleShape) else Modifier),
+                                Modifier.size(42.dp).background(tint(c.color), CircleShape)
+                                    .border(if (sel) 3.dp else 1.5.dp, if (sel) p.primary else p.ink.copy(alpha = 0.7f), CircleShape),
                                 contentAlignment = Alignment.Center,
-                            ) { Text(c.icon, fontSize = 18.sp) }
-                            Text(c.name, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, color = p.ink)
+                            ) { Text(categoryMark(c.name), fontFamily = Hand, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = p.ink) }
+                            Text(c.name, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, color = p.ink)
                         }
                     }
                 }
@@ -212,7 +213,7 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
             Keypad(
                 onKey = { k -> amount = typeKey(amount, k) },
                 onSave = ::save,
-                saveLabel = if (e == null) "บันทึก" else "บันทึกการแก้ไข",
+                saveLabel = if (e == null) "จดลงสมุด" else "แก้ในสมุด",
             )
             Spacer(Modifier.height(16.dp))
         }
@@ -257,7 +258,7 @@ private fun Keypad(onKey: (String) -> Unit, onSave: () -> Unit, saveLabel: Strin
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 r.forEach { k ->
                     Box(
-                        Modifier.weight(1f).height(50.dp).background(p.surface, RoundedCornerShape(14.dp)).clickable { onKey(k) },
+                        Modifier.weight(1f).height(52.dp).paperCard(p, p.bg).clickable { onKey(k) },
                         contentAlignment = Alignment.Center,
                     ) {
                         if (k == "⌫") Icon(Icons.AutoMirrored.Outlined.Backspace, "ลบตัวเลข", tint = p.ink)
@@ -267,9 +268,9 @@ private fun Keypad(onKey: (String) -> Unit, onSave: () -> Unit, saveLabel: Strin
             }
         }
         Button(
-            onClick = onSave, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp),
+            onClick = onSave, modifier = Modifier.fillMaxWidth().height(54.dp).border(2.dp, p.ink, RoundedCornerShape(8.dp)), shape = RoundedCornerShape(8.dp),
             colors = ButtonDefaults.buttonColors(containerColor = p.primary, contentColor = p.onPrimary),
-        ) { Text(saveLabel, fontSize = 17.sp, fontWeight = FontWeight.SemiBold) }
+        ) { Text(saveLabel, fontFamily = Hand, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
     }
 }
 

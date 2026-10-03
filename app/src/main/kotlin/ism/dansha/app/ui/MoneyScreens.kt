@@ -37,6 +37,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -109,119 +115,83 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
         val h = c.home
         val ov = c.overview
 
-        // การ์ดหลัก: วันนี้ใช้ได้
+        // การ์ดหลัก: วันนี้ใช้ได้ (กระดาษแปะ + เทปวาชิ + ไฮไลต์)
         item {
             val start = Dates.parse(ov.payCycleRange.start)
             val end = Dates.parse(ov.payCycleRange.end)
             val total = ChronoUnit.DAYS.between(start, end).toInt() + 1
             val passed = (total - h.daysLeft + 1).coerceIn(1, total)
-            Column(
-                Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth()
-                    .clip(RoundedCornerShape(28.dp))
-                    .background(Brush.linearGradient(listOf(p.heroStart, p.heroEnd)))
-                    .padding(20.dp),
-            ) {
-                Text("วันนี้ใช้ได้", color = p.ink.copy(alpha = 0.7f), fontSize = 14.sp)
-                Text("฿" + money(h.perDay), fontSize = 38.sp, fontWeight = FontWeight.Bold, color = if (h.perDay < 0) p.negative else p.ink)
-                Text(
-                    if (h.projected != null) "สิ้นรอบเหลือ ฿${money(h.projected)} · อีก ${h.daysLeft} วัน" else "ยังไม่มีแผนรอบนี้ · คิดจากเงินที่มี · อีก ${h.daysLeft} วัน",
-                    color = p.ink.copy(alpha = 0.75f), fontSize = 13.sp,
-                )
-                Spacer(Modifier.height(14.dp))
-                ProgressBar(passed.toFloat() / total, p.primary, p.card.copy(alpha = 0.6f))
-                Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                    Text(thaiDate(ov.payCycleRange.start), Modifier.weight(1f), fontSize = 11.sp, color = p.ink.copy(alpha = 0.6f))
-                    Text("วันที่ $passed/$total ของรอบ", fontSize = 11.sp, color = p.ink.copy(alpha = 0.6f))
-                    Spacer(Modifier.weight(1f))
-                    Text(thaiDate(ov.payCycleRange.end), fontSize = 11.sp, color = p.ink.copy(alpha = 0.6f))
+            Box(Modifier.padding(start = 36.dp, end = 16.dp, top = 14.dp, bottom = 8.dp).fillMaxWidth()) {
+                Column(Modifier.fillMaxWidth().paperCard(p).padding(start = 18.dp, end = 18.dp, top = 22.dp, bottom = 16.dp)) {
+                    Text("วันนี้ใช้ได้", color = p.muted, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                    Box {
+                        Box(Modifier.matchParentSize().padding(top = 26.dp, bottom = 6.dp).background(p.highlight))
+                        Text(
+                            (if (h.perDay < 0) "−฿" else "฿") + money(kotlin.math.abs(h.perDay)),
+                            fontSize = 42.sp, fontWeight = FontWeight.Bold, lineHeight = 48.sp,
+                            color = if (h.perDay < 0) p.negative else p.primary,
+                        )
+                    }
+                    Text(
+                        (if (h.projected != null) "สิ้นรอบเหลือ " + signedBaht(h.projected) else "ยังไม่มีแผนรอบนี้ · คิดจากเงินที่มี") + " · อีก ${h.daysLeft} วัน",
+                        color = p.ink, fontSize = 15.sp,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    DayBoxes(total, passed)
+                    Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+                        Text(thaiDate(ov.payCycleRange.start), Modifier.weight(1f), fontSize = 13.sp, color = p.muted)
+                        Text("วันที่ $passed จาก $total", fontSize = 13.sp, color = p.muted)
+                        Spacer(Modifier.weight(1f))
+                        Text(thaiDate(ov.payCycleRange.end), fontSize = 13.sp, color = p.muted)
+                    }
                 }
+                // เทปวาชิ
+                Box(Modifier.align(Alignment.TopCenter).offset(y = (-10).dp).size(92.dp, 22.dp).rotate(-3f).background(p.tape))
             }
         }
 
-        // เงินที่มี / หนี้
+        // เงินที่มี / หนี้ (บรรทัดในสมุด)
         item {
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StatTile("เงินที่มีตอนนี้", "฿" + money(h.cashNow), p.positiveSoft, if (h.cashNow < 0) p.negative else p.ink, Modifier.weight(1f))
-                StatTile("หนี้คงเหลือ", "฿" + money(h.debtTotal), p.negativeSoft, p.ink, Modifier.weight(1f).clickable(onClick = onOpenDebt))
+            Column(Modifier.padding(start = 36.dp, end = 16.dp, top = 4.dp)) {
+                LedgerLine("เงินที่มีตอนนี้", signedBaht(h.cashNow), if (h.cashNow < 0) p.negative else p.positive)
+                LedgerLine("หนี้คงเหลือ", "฿" + money(h.debtTotal), p.negative, onClick = onOpenDebt)
             }
         }
 
-        // บิลถัดไป
-        h.nextDebtBill?.let { b ->
-            item {
-                val days = Reminders.daysUntil(ov.today, b.due)
-                Card(Modifier.clickable(onClick = onOpenDebt)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(44.dp).background(if (b.overdue) p.negativeSoft else p.warningSoft, CircleShape), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Outlined.CreditCard, null, tint = if (b.overdue) p.negative else p.warning)
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("บิลถัดไป", color = p.muted, fontSize = 12.sp)
-                            Text(b.accountName, fontWeight = FontWeight.SemiBold, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text("ครบ ${thaiDate(b.due)}", color = p.muted, fontSize = 12.sp)
-                        }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text("฿" + money(b.amount), fontWeight = FontWeight.Bold, fontSize = 18.sp, color = p.ink)
-                            Pill(
-                                when { b.overdue || days < 0 -> "เลยกำหนด"; days == 0 -> "วันนี้!"; else -> "อีก $days วัน" },
-                                if (b.overdue || days <= 3) p.negativeSoft else p.surface,
-                                if (b.overdue || days <= 3) p.negative else p.muted,
-                            )
-                        }
+        // กระดาษโน้ต: บิลถัดไป + 60/40
+        item {
+            Row(Modifier.padding(start = 36.dp, end = 16.dp, top = 12.dp, bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                h.nextDebtBill?.let { b ->
+                    val days = Reminders.daysUntil(ov.today, b.due)
+                    StickyNote(p.sticky, -0.6f, Modifier.weight(1f).clickable(onClick = onOpenDebt)) {
+                        Text(
+                            when { b.overdue || days < 0 -> "บิลค้าง · เลยกำหนด"; days == 0 -> "บิลถัดไป · วันนี้!"; else -> "บิลถัดไป · อีก $days วัน" },
+                            fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (b.overdue || days <= 3) p.negative else p.ink.copy(alpha = 0.8f),
+                        )
+                        Text(b.accountName, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("฿" + money(b.amount), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = p.negative)
+                        Text("ครบ ${thaiDate(b.due)}", fontSize = 13.sp, color = p.ink.copy(alpha = 0.8f))
                     }
-                    h.cycleSpend.filter { it.second.total > 0 }.forEach { (name, cs) ->
-                        Spacer(Modifier.height(6.dp))
-                        Text("$name ใช้ในรอบบิล ${thaiDate(cs.start)} – ${thaiDate(cs.end)}: ฿${money(cs.total)}", color = p.muted, fontSize = 12.sp)
+                }
+                h.copay?.let { cp ->
+                    StickyNote(p.stickyBlue, 0.6f, Modifier.weight(1f)) {
+                        Text("60/40 · อีก ${cp.daysLeft} วัน", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = p.ink.copy(alpha = 0.8f))
+                        Text("รัฐช่วยได้วันนี้", fontSize = 15.sp, color = p.ink)
+                        Text("฿" + money(cp.leftToday), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = p.primary)
+                        Text("ซื้อเต็มได้ถึง ฿" + money(cp.fullPriceForToday), fontSize = 13.sp, color = p.ink.copy(alpha = 0.8f))
                     }
                 }
             }
         }
-
-        // 60/40
-        h.copay?.let { cp ->
-            item {
-                val cap = ov.copay?.config?.totalCap ?: 0.0
-                Card(color = if (p.dark) null else Color(0xFFF2F7FF)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("🟦 " + cp.name, Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Pill("อีก ${cp.daysLeft} วัน", p.surface, p.muted)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Row {
-                        Column(Modifier.weight(1f)) {
-                            Text("รัฐช่วยได้วันนี้อีก", color = p.muted, fontSize = 12.sp)
-                            Text("฿" + money(cp.leftToday), fontWeight = FontWeight.Bold, fontSize = 20.sp, color = p.ink)
-                        }
-                        Column(Modifier.weight(1f)) {
-                            Text("ซื้อราคาเต็มได้ถึง", color = p.muted, fontSize = 12.sp)
-                            Text("฿" + money(cp.fullPriceForToday), fontWeight = FontWeight.Bold, fontSize = 20.sp, color = p.ink)
-                        }
-                    }
-                    if (cap > 0) {
-                        Spacer(Modifier.height(10.dp))
-                        ProgressBar(((cap - cp.totalLeft) / cap).toFloat(), Color(0xFF5B8DEF), p.surface)
-                        Text("ใช้สิทธิไปแล้ว ฿${money(cap - cp.totalLeft)} จาก ฿${money(cap)}", color = p.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
-                    }
-                }
-            }
+        h.cycleSpend.filter { it.second.total > 0 }.forEach { (name, cs) ->
+            item { Text("$name ใช้ในรอบบิล ${thaiDate(cs.start)} – ${thaiDate(cs.end)}: ฿${money(cs.total)}", Modifier.padding(start = 36.dp, end = 16.dp, top = 4.dp), color = p.muted, fontSize = 13.sp) }
         }
 
         // พอร์ต
         ov.port?.let { port ->
             item {
-                Card {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("พอร์ตลงทุน", color = p.muted, fontSize = 12.sp)
-                            Text("฿" + money(port.valueThb), fontWeight = FontWeight.Bold, fontSize = 18.sp, color = p.ink)
-                        }
-                        Pill(
-                            (if (port.unrealizedThb >= 0) "+" else "") + "${port.unrealizedPct}%",
-                            if (port.unrealizedThb >= 0) p.positiveSoft else p.negativeSoft,
-                            if (port.unrealizedThb >= 0) p.positive else p.negative,
-                        )
-                    }
+                Column(Modifier.padding(start = 36.dp, end = 16.dp, top = 8.dp)) {
+                    LedgerLine("พอร์ตลงทุน (${if (port.unrealizedThb >= 0) "+" else ""}${port.unrealizedPct}%)", "฿" + money(port.valueThb), if (port.unrealizedThb >= 0) p.positive else p.negative)
                 }
             }
         }
@@ -229,47 +199,96 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
         // บัญชี
         item { SectionHeader("บัญชี") }
         item {
-            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            LazyRow(contentPadding = PaddingValues(start = 36.dp, end = 16.dp, top = 4.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(ov.accounts.filter { it.account.active }.sortedWith(compareBy({ it.account.sort ?: Int.MAX_VALUE }, { it.account.name })), key = { it.account.id }) { a ->
                     AccountCard(a)
                 }
             }
         }
 
-        // รายการล่าสุด
-        val recent = d.transactions.sortedWith(compareByDescending<Transaction> { it.date }.thenByDescending { it.created_at }).take(5)
+        // จดล่าสุด
+        val recent = d.transactions.sortedWith(compareByDescending<Transaction> { it.date }.thenByDescending { it.created_at }).take(6)
         if (recent.isNotEmpty()) {
-            item { SectionHeader("รายการล่าสุด", "ดูทั้งหมด ›", onOpenTransactions) }
-            item {
-                val accs = d.accounts.associateBy { it.id }
-                val cats = d.categories.associateBy { it.id }
-                Card(padding = 0.dp) {
-                    recent.forEach { t -> TransactionRow(t, accs, cats) { editingTxn = t } }
-                }
-            }
+            item { SectionHeader("จดล่าสุด", "ดูทั้งเล่ม ›", onOpenTransactions) }
+            val accs = d.accounts.associateBy { it.id }
+            val cats = d.categories.associateBy { it.id }
+            recent.forEach { t -> item(key = "r_${t.id}") { TransactionRow(t, accs, cats, showDate = true) { editingTxn = t } } }
         }
     }
     editingTxn?.let { t -> TransactionEditor(d, t, vm) { editingTxn = null } }
 }
 
+/** ยอดเงินมีเครื่องหมาย: −฿24.80 / ฿1,402.37 */
+fun signedBaht(v: Double): String = (if (v < 0) "−฿" else "฿") + money(kotlin.math.abs(v))
+
+/** บรรทัดในสมุด: ชื่อซ้าย ยอดขวา เส้นประใต้ */
+@Composable
+fun LedgerLine(label: String, value: String, valueColor: Color, onClick: (() -> Unit)? = null) {
+    val p = LocalPalette.current
+    Row(
+        Modifier.fillMaxWidth().height(40.dp).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .drawBehind {
+                val y = size.height - 1.dp.toPx()
+                drawLine(p.line, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)))
+            },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, Modifier.weight(1f), fontSize = 16.sp, color = p.ink)
+        Text(value, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = valueColor)
+    }
+}
+
+/** กระดาษโน้ตแปะ (เอียงนิดเดียว ให้อ่านง่าย) */
+@Composable
+fun StickyNote(color: Color, angle: Float, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val p = LocalPalette.current
+    Column(
+        modifier.rotate(angle)
+            .drawBehind { drawRect(p.ink.copy(alpha = if (p.dark) 0.35f else 0.15f), topLeft = Offset(2.dp.toPx(), 3.dp.toPx()), size = size) }
+            .background(color).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(1.dp),
+    ) { content() }
+}
+
+/** กล่องติ๊กวันในรอบ (ผ่านแล้ว = ทึบ, วันนี้ = ไฮไลต์) */
+@Composable
+fun DayBoxes(total: Int, passed: Int) {
+    val p = LocalPalette.current
+    val perRow = 15
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        (0 until total).chunked(perRow).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                row.forEach { i ->
+                    Box(
+                        Modifier.weight(1f).height(14.dp)
+                            .background(if (i < passed - 1) p.ink else if (i == passed - 1) p.highlight else Color.Transparent, RoundedCornerShape(2.dp))
+                            .border(1.2.dp, p.ink.copy(alpha = 0.8f), RoundedCornerShape(2.dp)),
+                    )
+                }
+                repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
 @Composable
 fun SectionHeader(title: String, action: String? = null, onAction: (() -> Unit)? = null) {
-    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = DanshaColors.Ink)
-        if (action != null && onAction != null) Text(action, Modifier.clickable(onClick = onAction), color = DanshaColors.Primary, fontSize = 13.sp)
+    Row(Modifier.fillMaxWidth().padding(start = 36.dp, end = 16.dp, top = 16.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, Modifier.weight(1f), fontFamily = Hand, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = DanshaColors.Primary)
+        if (action != null && onAction != null) Text(action, Modifier.clickable(onClick = onAction).padding(vertical = 8.dp), color = DanshaColors.Primary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
 /** ป้ายเล็กมนๆ */
 @Composable
 fun Pill(text: String, bg: Color, fg: Color) {
-    Text(text, Modifier.background(bg, RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 2.dp), color = fg, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+    Text(text, Modifier.background(bg, RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 2.dp), color = fg, fontSize = 13.sp, fontWeight = FontWeight.Medium)
 }
 
 @Composable
 private fun StatTile(label: String, value: String, bg: Color, fg: Color, modifier: Modifier) {
     Column(modifier.clip(RoundedCornerShape(20.dp)).background(bg).padding(14.dp)) {
-        Text(label, color = DanshaColors.Muted, fontSize = 12.sp)
+        Text(label, color = DanshaColors.Muted, fontSize = 13.sp)
         Text(value, color = fg, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1)
     }
 }
@@ -279,21 +298,21 @@ private fun StatTile(label: String, value: String, bg: Color, fg: Color, modifie
 private fun AccountCard(a: AccountView) {
     val p = LocalPalette.current
     Column(
-        Modifier.width(156.dp).height(104.dp).clip(RoundedCornerShape(20.dp)).background(tint(a.account.color)).padding(12.dp),
+        Modifier.width(160.dp).height(108.dp).paperCard(p, tint(a.account.color)).padding(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             AccountBadge(a.account, 28)
             Spacer(Modifier.width(6.dp))
-            Text(a.account.name, fontSize = 12.sp, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(a.account.name, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.weight(1f))
         if (a.isCredit) {
-            Text("ใช้ไป", fontSize = 11.sp, color = p.ink.copy(alpha = 0.6f))
-            Text("฿" + money(a.used), fontWeight = FontWeight.Bold, color = p.ink, maxLines = 1)
+            Text("ใช้ไป", fontSize = 13.sp, color = p.ink.copy(alpha = 0.75f))
+            Text("฿" + money(a.used), fontWeight = FontWeight.Bold, fontSize = 17.sp, color = p.negative, maxLines = 1)
         } else {
             val cur = if (a.account.currency != "THB") " ${a.account.currency}" else ""
-            Text("คงเหลือ", fontSize = 11.sp, color = p.ink.copy(alpha = 0.6f))
-            Text(money(a.balance) + cur, fontWeight = FontWeight.Bold, color = if ((a.balance ?: 0.0) < 0) p.negative else p.ink, maxLines = 1)
+            Text("คงเหลือ", fontSize = 13.sp, color = p.ink.copy(alpha = 0.75f))
+            Text(money(a.balance) + cur, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = if ((a.balance ?: 0.0) < 0) p.negative else p.ink, maxLines = 1)
         }
     }
 }

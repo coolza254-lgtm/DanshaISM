@@ -82,7 +82,7 @@ fun ShopeePage(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onC
                         if (o.status == "cancelled") "ยกเลิก" else null,
                         po?.let { if (it.left > 0) "เหลือ ${money(it.left)} งวดถัดไป ${it.next?.let(::thaiDate) ?: "-"}" else "ผ่อนครบแล้ว" },
                     ).joinToString(" · "),
-                    color = DanshaColors.Muted, fontSize = 12.sp,
+                    color = DanshaColors.Muted, fontSize = 13.sp,
                 )
             }
             HorizontalDivider(color = DanshaColors.Line)

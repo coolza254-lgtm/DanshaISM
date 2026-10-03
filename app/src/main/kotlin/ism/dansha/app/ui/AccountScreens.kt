@@ -74,7 +74,7 @@ fun AccountsPage(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, o
                                 "spaylater" -> append(" · ตัวคำนวณ SPayLater")
                             }
                         },
-                        color = DanshaColors.Muted, fontSize = 12.sp,
+                        color = DanshaColors.Muted, fontSize = 13.sp,
                     )
                 }
                 if (v != null) {

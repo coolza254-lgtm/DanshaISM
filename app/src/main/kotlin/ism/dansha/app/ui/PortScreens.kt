@@ -76,10 +76,10 @@ fun PortPage(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) {
                     Text(
                         "${num(h.qty)} หน่วย · ทุนเฉลี่ย ${num(h.avgCost)} ${h.currency} · ราคา ${num(h.price)}" +
                             (h.unrealizedPct?.let { " · $it%" } ?: ""),
-                        color = DanshaColors.Muted, fontSize = 12.sp,
+                        color = DanshaColors.Muted, fontSize = 13.sp,
                     )
                     if (h.currency != "THB" && h.priceEffectThb != null) {
-                        Text("กำไรจากราคา ${money(h.priceEffectThb)} · จากค่าเงิน ${money(h.fxEffectThb)}", color = DanshaColors.Muted, fontSize = 12.sp)
+                        Text("กำไรจากราคา ${money(h.priceEffectThb)} · จากค่าเงิน ${money(h.fxEffectThb)}", color = DanshaColors.Muted, fontSize = 13.sp)
                     }
                 }
                 HorizontalDivider(color = DanshaColors.Line)
@@ -91,7 +91,7 @@ fun PortPage(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) {
                 Row(Modifier.fillMaxWidth().clickable { editing = t }.padding(vertical = 6.dp)) {
                     Column(Modifier.weight(1f)) {
                         Text("${SIDE_LABELS[t.side] ?: t.side} ${t.symbol}", fontSize = 14.sp)
-                        Text("${thaiDate(t.date)} · ${t.broker}", color = DanshaColors.Muted, fontSize = 12.sp)
+                        Text("${thaiDate(t.date)} · ${t.broker}", color = DanshaColors.Muted, fontSize = 13.sp)
                     }
                     Text(
                         if (t.side == "buy" || t.side == "sell") "${amountText(t.qty)} × ${amountText(t.price)} ${t.currency}" else "${amountText(t.price)} ${t.currency}",

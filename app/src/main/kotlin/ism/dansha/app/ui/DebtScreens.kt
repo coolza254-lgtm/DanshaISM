@@ -66,7 +66,7 @@ fun DebtScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel) {
     LazyColumn(Modifier.fillMaxSize()) {
         item { ScreenTitle("หนี้") }
         if (c == null) {
-            item { Text("ยังไม่มีข้อมูล", Modifier.padding(20.dp), color = DanshaColors.Muted) }
+            item { Text("ยังไม่มีข้อมูล", Modifier.padding(start = 36.dp, end = 16.dp, top = 16.dp, bottom = 16.dp), color = DanshaColors.Muted) }
             return@LazyColumn
         }
         val states = c.debts
@@ -84,7 +84,7 @@ fun DebtScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel) {
                     Text(
                         "กลยุทธ์: โปะ PayNext ธรรมดาให้หมดก่อน (ผ่อนสั้น ดอกต่องวดแรงกว่า) ส่วน Extra จ่ายตามบิลพอ",
                         Modifier.background(DanshaColors.Surface, RoundedCornerShape(8.dp)).padding(10.dp),
-                        fontSize = 12.sp,
+                        fontSize = 13.sp,
                     )
                 }
             }
@@ -152,10 +152,10 @@ private fun DebtAccountCard(d: DanshaData, acc: Account, st: DebtState, onAction
                             verticalArrangement = Arrangement.spacedBy(1.dp),
                         ) {
                             Text(l.desc.ifEmpty { KIND_LABELS[l.kind] ?: l.kind } + if (l.status == "closed") " (ปิดแล้ว)" else "", fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                            Text("กู้ ${thaiDate(l.start)} · ${money(l.principal)} · ${l.tenor} งวด งวดละ ${money(l.installment)}", color = DanshaColors.Muted, fontSize = 12.sp)
-                            Text("จ่ายแล้ว ${l.paidPeriods} งวด เหลือ ${l.periodsLeft} · คงเหลือ ${money(l.remaining)} · ดอกค้าง ${money(l.accruedInterest)}", fontSize = 12.sp)
+                            Text("กู้ ${thaiDate(l.start)} · ${money(l.principal)} · ${l.tenor} งวด งวดละ ${money(l.installment)}", color = DanshaColors.Muted, fontSize = 13.sp)
+                            Text("จ่ายแล้ว ${l.paidPeriods} งวด เหลือ ${l.periodsLeft} · คงเหลือ ${money(l.remaining)} · ดอกค้าง ${money(l.accruedInterest)}", fontSize = 13.sp)
                             st.schedule?.get(l.id)?.take(3)?.let { rows ->
-                                Text(rows.joinToString("  ") { "${thaiDate(it.due)} ${money(it.O)}" }, color = DanshaColors.Muted, fontSize = 11.sp)
+                                Text(rows.joinToString("  ") { "${thaiDate(it.due)} ${money(it.O)}" }, color = DanshaColors.Muted, fontSize = 13.sp)
                             }
                         }
                     }
