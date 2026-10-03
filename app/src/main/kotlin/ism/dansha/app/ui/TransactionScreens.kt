@@ -1,0 +1,244 @@
+package ism.dansha.app.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import ism.dansha.app.MainViewModel
+import ism.dansha.core.DanshaData
+import ism.dansha.core.Dates
+import ism.dansha.core.Transaction
+import ism.dansha.core.engine.Engine
+import ism.dansha.core.engine.Forms
+import ism.dansha.core.engine.Outlook
+import ism.dansha.core.engine.toDec
+import java.math.BigDecimal
+
+private val TYPE_LABELS = listOf("expense" to "รายจ่าย", "income" to "รายรับ", "transfer" to "โอน")
+
+// ---------- รายการ ----------
+
+@Composable
+fun TransactionsScreen(d: DanshaData, vm: MainViewModel) {
+    val startDay = remember(d) { Engine.startDay(Engine.config(d)) }
+    val current = remember(d) { Dates.payCycleOf(Dates.today(), startDay) }
+    var cycle by rememberSaveable { mutableStateOf(current) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var editing by remember { mutableStateOf<Transaction?>(null) }
+    var creating by remember { mutableStateOf(false) }
+
+    val accounts = remember(d) { d.accounts.associateBy { it.id } }
+    val categories = remember(d) { d.categories.associateBy { it.id } }
+    val searching = query.isNotBlank()
+    val rows = remember(d, cycle, query) {
+        (if (searching) Forms.search(d, query) else d.transactions.filter { it.pay_cycle == cycle })
+            .sortedWith(compareByDescending<Transaction> { it.date }.thenByDescending { it.created_at })
+    }
+    val income = rows.filter { it.type == "income" }.sumOf { it.amount ?: BigDecimal.ZERO }
+    val expense = rows.filter { it.type == "expense" }.sumOf { it.amount ?: BigDecimal.ZERO }
+
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize()) {
+            item { ScreenTitle("รายการ") }
+            item {
+                Column(Modifier.padding(horizontal = 16.dp)) {
+                    TextInput("ค้นหา (โน้ต หมวด บัญชี ยอด)", query, { query = it })
+                    if (!searching) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = { cycle = Outlook.shiftCycle(cycle, -1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "รอบก่อน") }
+                            val (rs, re) = Dates.payCycleRange(cycle, startDay)
+                            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("รอบ ${cycle.substring(8)}${if (cycle == current) " (รอบนี้)" else ""}", fontWeight = FontWeight.SemiBold)
+                                Text("${thaiDate(rs.toString())} – ${thaiDate(re.toString())}", color = DanshaColors.Muted, fontSize = 12.sp)
+                            }
+                            IconButton(onClick = { cycle = Outlook.shiftCycle(cycle, 1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "รอบถัดไป") }
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                        Text("รับ ${formatMoney(income)}", Modifier.weight(1f), color = DanshaColors.Positive, fontSize = 13.sp)
+                        Text("จ่าย ${formatMoney(expense)}", Modifier.weight(1f), color = DanshaColors.Negative, fontSize = 13.sp, textAlign = TextAlign.End)
+                    }
+                }
+            }
+            if (rows.isEmpty()) item { Text(if (searching) "ไม่พบรายการ" else "ยังไม่มีรายการในรอบนี้", Modifier.padding(20.dp), color = DanshaColors.Muted) }
+            rows.groupBy { it.date }.forEach { (date, list) ->
+                item(key = "h_$date") {
+                    Text(
+                        thaiDate(date), Modifier.fillMaxWidth().background(DanshaColors.Surface).padding(horizontal = 20.dp, vertical = 6.dp),
+                        fontSize = 12.sp, color = DanshaColors.Muted, fontWeight = FontWeight.Medium,
+                    )
+                }
+                items(list, key = { it.id }) { t ->
+                    TransactionRow(t, accounts, categories) { editing = t }
+                }
+            }
+            item { Spacer(Modifier.height(88.dp)) }
+        }
+        FloatingActionButton(
+            onClick = { creating = true },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
+            containerColor = DanshaColors.Ink, contentColor = Color.White,
+        ) { Icon(Icons.Filled.Add, "เพิ่มรายการ") }
+    }
+
+    if (creating) TransactionEditor(d, null, vm) { creating = false }
+    editing?.let { t -> TransactionEditor(d, t, vm) { editing = null } }
+}
+
+@Composable
+fun TransactionRow(t: Transaction, accounts: Map<String, ism.dansha.core.Account>, categories: Map<String, ism.dansha.core.Category>, onClick: () -> Unit) {
+    val cat = categories[t.subcategory_id.ifEmpty { t.category_id }] ?: categories[t.category_id]
+    val (sign, color) = when (t.type) {
+        "income" -> "+" to DanshaColors.Positive
+        "expense" -> "−" to DanshaColors.Negative
+        else -> "" to DanshaColors.Ink
+    }
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(36.dp).background(parseColor(cat?.color.orEmpty()), CircleShape), contentAlignment = Alignment.Center) {
+            Text(if (t.type == "transfer") "⇄" else cat?.icon ?: "•", fontSize = 16.sp)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(t.note.ifEmpty { cat?.name ?: if (t.type == "transfer") "โอน" else "-" }, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val sub = buildString {
+                append(accounts[t.account_id]?.name ?: "?")
+                if (t.type == "transfer") append(" → ").append(accounts[t.to_account_id]?.name ?: "?")
+                else if (cat != null) append(" · ").append(cat.name)
+                val gov = t.gov_subsidy
+                if (gov != null && gov.signum() > 0) append(" · 60/40 รัฐจ่าย ").append(formatMoney(gov))
+            }
+            Text(sub, color = DanshaColors.Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Text("$sign${formatMoney(t.amount)}", color = color, fontWeight = FontWeight.SemiBold)
+    }
+    HorizontalDivider(Modifier.padding(start = 68.dp), color = DanshaColors.Line)
+}
+
+// ---------- ฟอร์มเพิ่ม/แก้รายการ ----------
+
+@Composable
+fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, onClose: () -> Unit) {
+    val e = existing
+    var type by remember { mutableStateOf(e?.type ?: "expense") }
+    var amount by remember { mutableStateOf(amountText(e?.amount)) }
+    var date by remember { mutableStateOf(e?.date ?: Dates.todayStr()) }
+    var accountId by remember { mutableStateOf(e?.account_id ?: Forms.defaultAccount(d, "expense")) }
+    var toAccountId by remember { mutableStateOf(e?.to_account_id.orEmpty()) }
+    var categoryId by remember { mutableStateOf(e?.category_id.orEmpty()) }
+    var subId by remember { mutableStateOf(e?.subcategory_id.orEmpty()) }
+    var note by remember { mutableStateOf(e?.note.orEmpty()) }
+    val hadCopay = (e?.gov_subsidy?.signum() ?: 0) > 0
+    var copay by remember { mutableStateOf(hadCopay) }
+    var fullPrice by remember { mutableStateOf(amountText(e?.full_price)) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    val accounts = d.accounts.filter { it.active || it.id == e?.account_id || it.id == e?.to_account_id }
+        .sortedWith(compareBy({ it.sort ?: Int.MAX_VALUE }, { it.name }))
+    val accountOptions = accounts.map { it.id to it.name }
+    val eligible = Forms.copayEligible(d, type, accountId, date)
+    val useCopay = copay && eligible
+    val preview = if (useCopay) Forms.copayPreview(d, type, accountId, date, Forms.parseAmount(fullPrice), e?.id) else null
+
+    fun save() {
+        error = null
+        val acc = d.accounts.firstOrNull { it.id == accountId }
+        val amt = if (useCopay) preview?.self else Forms.parseAmount(amount)
+        val row = (e ?: Transaction(id = "", source = "manual")).copy(
+            date = date, type = type, account_id = accountId,
+            to_account_id = if (type == "transfer") toAccountId else "",
+            amount = amt?.toDec(),
+            currency = acc?.currency ?: e?.currency.orEmpty(),
+            category_id = if (type == "transfer") "" else categoryId,
+            subcategory_id = if (type == "transfer") "" else subId,
+            note = note,
+            full_price = if (useCopay) Forms.parseAmount(fullPrice)?.toDec() else e?.full_price,
+            gov_subsidy = e?.gov_subsidy,
+        )
+        // true = คำนวณสิทธิใหม่, false = ยกเลิกสิทธิของรายการนี้, null = ไม่เกี่ยว
+        val copayFlag: Boolean? = when {
+            useCopay -> true
+            hadCopay -> false
+            else -> null
+        }
+        vm.edit<Any>(ok = if (e == null) "บันทึกแล้ว" else "แก้ไขแล้ว", onError = { error = it }, onOk = { onClose() }) {
+            if (e == null) createTransaction(row, copayFlag) else updateTransaction(row, copayFlag)
+        }
+    }
+
+    FormPage(if (e == null) "เพิ่มรายการ" else "แก้ไขรายการ", onClose, ::save) {
+        error?.let { Note(it, DanshaColors.Negative) }
+        ChoiceChips(TYPE_LABELS, type, { t ->
+            type = t
+            if (e == null) accountId = Forms.defaultAccount(d, t)
+            categoryId = ""; subId = ""
+        })
+        if (eligible && type == "expense") {
+            SwitchRow("ใช้สิทธิ 60/40", copay, { copay = it }, sub = preview?.let { "รัฐช่วยได้วันนี้อีก ${formatMoney(BigDecimal.valueOf(it.leftToday))}" })
+        }
+        if (useCopay) {
+            AmountField("ราคาเต็ม (บาท)", fullPrice, { fullPrice = it })
+            preview?.let {
+                Note("รัฐจ่าย ${formatMoney(BigDecimal.valueOf(it.gov))} · จ่ายเอง ${formatMoney(BigDecimal.valueOf(it.self))}", DanshaColors.Ink)
+            }
+        } else {
+            AmountField("จำนวนเงิน", amount, { amount = it })
+        }
+        DateField("วันที่", date, { date = it })
+        Picker(if (type == "transfer") "จากบัญชี" else "บัญชี", accountOptions, accountId, { accountId = it })
+        if (type == "transfer") {
+            Picker("ไปบัญชี", listOf("" to "— เลือก —") + accountOptions.filter { it.first != accountId }, toAccountId, { toAccountId = it })
+            Note("จ่ายหนี้ PayNext / SPayLater = โอนเข้าบัญชีวงเงินนั้น")
+        } else {
+            val tree = Forms.categoryTree(d, type, keep = setOf(categoryId, subId))
+            Picker("หมวด", listOf("" to "— ไม่ระบุ —") + tree.map { it.category.id to "${it.category.icon} ${it.category.name}" }, categoryId, {
+                categoryId = it; subId = ""
+            })
+            val subs = tree.firstOrNull { it.category.id == categoryId }?.children.orEmpty()
+            if (subs.isNotEmpty()) {
+                ChoiceChips(listOf("" to "ทั้งหมวด") + subs.map { it.id to it.name }, subId, { subId = it })
+            }
+        }
+        TextInput("โน้ต", note, { note = it }, singleLine = false)
+        if (e != null) {
+            if (e.source == "bill_plan") Note("รายการนี้มาจากแผนบิล ลบแล้วแผนจะกลับเป็น \"ยังไม่จ่าย\"")
+            if (e.source == "debt") Note("รายการนี้ผูกกับหนี้ย่อย (เบิกเงินสด) ลบแล้วหนี้ย่อยจะถูกลบด้วย")
+            DeleteButton("รายการนี้") {
+                vm.edit<Unit>(ok = "ลบแล้ว", onError = { error = it }, onOk = { onClose() }) { deleteTransaction(e.id) }
+            }
+        }
+    }
+}

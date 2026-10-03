@@ -143,63 +143,6 @@ fun ComingSoon(title: String, what: String, phase: Int) {
     }
 }
 
-// ---------- รายการ ----------
-
-@Composable
-fun TransactionsScreen(d: DanshaData) {
-    val accounts = remember(d) { d.accounts.associateBy { it.id } }
-    val categories = remember(d) { d.categories.associateBy { it.id } }
-    val byDate = remember(d) {
-        d.transactions.sortedWith(compareByDescending<Transaction> { it.date }.thenByDescending { it.created_at })
-            .groupBy { it.date }
-    }
-    LazyColumn(Modifier.fillMaxSize()) {
-        item { ScreenTitle("รายการ", "ทั้งหมด ${d.transactions.size} รายการ · เพิ่ม/แก้ไข มาใน Phase 3") }
-        if (d.transactions.isEmpty()) {
-            item { Text("ยังไม่มีรายการ", Modifier.padding(20.dp), color = DanshaColors.Muted) }
-        }
-        byDate.forEach { (date, list) ->
-            item(key = "h_$date") {
-                Text(
-                    thaiDate(date), Modifier.fillMaxWidth().background(DanshaColors.Surface).padding(horizontal = 20.dp, vertical = 6.dp),
-                    fontSize = 12.sp, color = DanshaColors.Muted, fontWeight = FontWeight.Medium,
-                )
-            }
-            items(list, key = { it.id }) { t ->
-                val cat = categories[t.subcategory_id.ifEmpty { t.category_id }] ?: categories[t.category_id]
-                val acc = accounts[t.account_id]
-                val (sign, color) = when (t.type) {
-                    "income" -> "+" to DanshaColors.Positive
-                    "expense" -> "−" to DanshaColors.Negative
-                    else -> "" to DanshaColors.Ink
-                }
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        Modifier.size(36.dp).background(parseColor(cat?.color.orEmpty()), CircleShape),
-                        contentAlignment = Alignment.Center,
-                    ) { Text(if (t.type == "transfer") "⇄" else cat?.icon ?: "•", fontSize = 16.sp) }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(t.note.ifEmpty { cat?.name ?: "-" }, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        val sub = buildString {
-                            append(acc?.name ?: "?")
-                            if (t.type == "transfer") append(" → ").append(accounts[t.to_account_id]?.name ?: "?")
-                            else if (cat != null) append(" · ").append(cat.name)
-                            if (t.gov_subsidy != null && t.gov_subsidy!!.signum() > 0) append(" · 60/40 รัฐจ่าย ").append(formatMoney(t.gov_subsidy))
-                        }
-                        Text(sub, color = DanshaColors.Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    Text("$sign${formatMoney(t.amount)}", color = color, fontWeight = FontWeight.SemiBold)
-                }
-                HorizontalDivider(Modifier.padding(start = 68.dp), color = DanshaColors.Line)
-            }
-        }
-    }
-}
-
 private val THAI_MONTHS = listOf("ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.")
 
 /** "2026-10-03" → "3 ต.ค. 2569" */

@@ -15,6 +15,8 @@ import ism.dansha.core.Dates
 import ism.dansha.core.Schema
 import ism.dansha.core.engine.DebtState
 import ism.dansha.core.engine.Engine
+import ism.dansha.core.engine.EngineException
+import ism.dansha.core.engine.Store
 import ism.dansha.core.engine.Home
 import ism.dansha.core.engine.HomeFigures
 import ism.dansha.core.engine.Overview
@@ -83,6 +85,39 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearMessage() {
         _message.value = null
+    }
+
+    // ---------- แก้ไขข้อมูล ----------
+
+    /**
+     * แก้ไขข้อมูล 1 ครั้ง: สำเร็จ → แสดง ok (ถ้ามี) แล้วเรียก onOk, ไม่สำเร็จ → แสดงข้อความ error ภาษาไทยจากตัวคำนวณ
+     */
+    fun <T> edit(
+        ok: String? = null,
+        onError: ((String) -> Unit)? = null,
+        onOk: (T) -> Unit = {},
+        block: Store.() -> T,
+    ) {
+        viewModelScope.launch {
+            val err = try {
+                val v = repo.edit(block)
+                if (ok != null) _message.value = ok
+                onOk(v)
+                null
+            } catch (e: EngineException) {
+                e.message ?: "บันทึกไม่สำเร็จ"
+            } catch (e: Exception) {
+                android.util.Log.e("Dansha", "บันทึกไม่สำเร็จ", e)
+                "บันทึกไม่สำเร็จ: ${e.message ?: e.javaClass.simpleName}"
+            }
+            if (err != null) {
+                if (onError != null) onError(err) else _message.value = err
+            }
+        }
+    }
+
+    fun toast(text: String) {
+        _message.value = text
     }
 
     // ---------- นำเข้า / ส่งออก ----------

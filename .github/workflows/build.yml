@@ -1,7 +1,7 @@
 name: build
 
 # ทุก push: ทดสอบ core + สร้าง APK
-# push เข้า branch หลักของ repo (หรือกด Run workflow): สร้าง Release ที่เซ็นแล้ว ให้แอพอัปเดตตัวเองได้
+# สร้าง Release ที่เซ็นแล้ว (แอพจะเห็นเวอร์ชันใหม่) เมื่อ: กด Run workflow หรือ commit บน branch หลักที่มีคำว่า [release]
 on:
   push:
   workflow_dispatch:
@@ -72,7 +72,7 @@ jobs:
           path: ${{ steps.apk.outputs.file }}
 
       - name: สร้าง Release
-        if: steps.keystore.outputs.signed == 'true' && (github.ref_name == github.event.repository.default_branch || github.event_name == 'workflow_dispatch')
+        if: steps.keystore.outputs.signed == 'true' && (github.event_name == 'workflow_dispatch' || (github.ref_name == github.event.repository.default_branch && contains(github.event.head_commit.message, '[release]')))
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.apk.outputs.version }}

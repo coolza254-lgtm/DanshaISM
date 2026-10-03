@@ -83,7 +83,7 @@ fun DanshaRoot(vm: MainViewModel) {
             } else {
                 when (tab) {
                     Tab.Home -> HomeScreen(d, computed, vm, onOpenDebt = { tab = Tab.Debt })
-                    Tab.Transactions -> TransactionsScreen(d)
+                    Tab.Transactions -> TransactionsScreen(d, vm)
                     Tab.Summary -> ComingSoon("สรุป", "สรุปรายรับรายจ่ายตามหมวด กราฟรายวัน", 4)
                     Tab.Plan -> ComingSoon("แผนบิล", "แผนบิลรายรอบ สร้างจากแม่แบบ จ่าย/ยกเลิกจ่าย ภาพรวมรายรอบ", 3)
                     Tab.Debt -> DebtScreen(computed)

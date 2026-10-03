@@ -4,11 +4,14 @@ import androidx.room.withTransaction
 import ism.dansha.core.DanshaData
 import ism.dansha.core.DataFile
 import ism.dansha.core.Dates
+import ism.dansha.core.engine.Store
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * ที่เก็บข้อมูลของแอพ: ข้อมูลทั้งหมดโหลดขึ้นหน่วยความจำ (ข้อมูลส่วนตัวมีไม่กี่ร้อยแถว)
@@ -43,7 +46,20 @@ class Repository(private val db: AppDatabase) {
     }
 
     /** แทนที่ข้อมูลทั้งหมดในเครื่อง (นำเข้า / เริ่มใหม่) ทำในธุรกรรมเดียว พังกลางทางจะไม่มีอะไรเปลี่ยน */
-    suspend fun replaceAll(d: DanshaData): DanshaData = lock.withLock {
+    suspend fun replaceAll(d: DanshaData): DanshaData = lock.withLock { writeAll(d) }
+
+    /**
+     * แก้ไขข้อมูลผ่านตัวคำนวณ (Store: ตรวจ/คำนวณแบบเดียวกับระบบเดิม) แล้วบันทึก
+     * ถ้า block โยน EngineException จะไม่มีอะไรเปลี่ยน
+     */
+    suspend fun <T> edit(block: Store.() -> T): T = lock.withLock {
+        val current = _data.value ?: reload()
+        val result = withContext(Dispatchers.Default) { Store.run(current, block) }
+        writeAll(result.data)
+        result.value
+    }
+
+    private suspend fun writeAll(d: DanshaData): DanshaData {
         db.withTransaction {
             dao.clearConfig(); dao.clearAccounts(); dao.clearTransactions(); dao.clearBills()
             dao.clearBillTemplates(); dao.clearDebts(); dao.clearShopee(); dao.clearPort()
@@ -60,7 +76,7 @@ class Repository(private val db: AppDatabase) {
             dao.putFx(d.fx.map(::FxEntity))
             dao.putPrices(d.prices.map(::PriceEntity))
         }
-        reload()
+        return reload()
     }
 
     /** ข้อความไฟล์ส่งออก (dansha-data/1) */
