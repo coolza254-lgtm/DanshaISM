@@ -58,6 +58,12 @@ android {
         buildConfig = true
     }
 
+    lint {
+        // lint ตอน release ต้องดาวน์โหลดเครื่องมือเพิ่มจาก Maven Central ทุกครั้ง (เคยทำ build ล้มเพราะเน็ตของ runner)
+        // ไม่ใช่การทดสอบตัวเลข — ตัวทดสอบหลักคือ :core:test
+        checkReleaseBuilds = false
+    }
+
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
