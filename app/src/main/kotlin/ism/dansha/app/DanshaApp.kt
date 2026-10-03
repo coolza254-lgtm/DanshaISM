@@ -11,5 +11,6 @@ class DanshaApp : Application() {
     override fun onCreate() {
         super.onCreate()
         repository = Repository(AppDatabase.open(this))
+        ism.dansha.app.notify.Notifier.setup(this)
     }
 }

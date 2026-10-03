@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- เปิดตัวติดตั้งของ Android ตอนอัปเดตแอพ -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- แจ้งเตือนครบกำหนด / สรุปรายวัน (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".DanshaApp"

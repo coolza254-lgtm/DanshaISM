@@ -119,6 +119,13 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
                 }
             }
         }
+        item {
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            OutlinedButton(
+                onClick = { vm.summaryText()?.let { shareText(ctx, it) } },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            ) { Text("แชร์สรุปวันนี้ (LINE ฯลฯ)") }
+        }
         h.nextDebtBill?.let { b ->
             item {
                 Card(Modifier.clickable(onClick = onOpenDebt)) {

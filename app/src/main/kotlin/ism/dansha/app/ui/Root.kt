@@ -44,7 +44,7 @@ enum class Tab(val label: String, val icon: ImageVector) {
 }
 
 /** หน้าที่เปิดซ้อนบนแท็บ */
-enum class Page { Accounts, Templates }
+enum class Page { Accounts, Templates, Shopee, Port, Settings }
 
 @Composable
 fun DanshaRoot(vm: MainViewModel) {
@@ -56,6 +56,21 @@ fun DanshaRoot(vm: MainViewModel) {
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
     var page by rememberSaveable { mutableStateOf<Page?>(null) }
     val snackbar = remember { SnackbarHostState() }
+
+    // ขออนุญาตแจ้งเตือนครั้งแรก (Android 13+) — ปฏิเสธแล้วเปิดทีหลังได้ในหน้าตั้งค่า
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val askNotify = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) {}
+    LaunchedEffect(data?.isEmpty()) {
+        val prefs = context.getSharedPreferences("app", android.content.Context.MODE_PRIVATE)
+        if (data?.isEmpty() == false && android.os.Build.VERSION.SDK_INT >= 33 &&
+            !ism.dansha.app.notify.Notifier.canNotify(context) && !prefs.getBoolean("asked_notify", false)
+        ) {
+            prefs.edit().putBoolean("asked_notify", true).apply()
+            askNotify.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     LaunchedEffect(message) {
         message?.let {
@@ -88,7 +103,7 @@ fun DanshaRoot(vm: MainViewModel) {
                 when (tab) {
                     Tab.Home -> HomeScreen(d, computed, vm, onOpenDebt = { tab = Tab.Debt })
                     Tab.Transactions -> TransactionsScreen(d, vm)
-                    Tab.Summary -> ComingSoon("สรุป", "สรุปรายรับรายจ่ายตามหมวด กราฟรายวัน", 4)
+                    Tab.Summary -> SummaryScreen(d, vm)
                     Tab.Plan -> PlanScreen(d, computed, vm, onOpenTemplates = { page = Page.Templates })
                     Tab.Debt -> DebtScreen(d, computed, vm)
                     Tab.More -> MoreScreen(d, vm, onOpen = { page = it })
@@ -102,6 +117,9 @@ fun DanshaRoot(vm: MainViewModel) {
         when (page) {
             Page.Accounts -> AccountsPage(d, computed, vm) { page = null }
             Page.Templates -> TemplatesPage(d, vm) { page = null }
+            Page.Shopee -> ShopeePage(d, computed, vm) { page = null }
+            Page.Port -> PortPage(d, vm) { page = null }
+            Page.Settings -> SettingsPage(d, vm) { page = null }
             null -> Unit
         }
     }

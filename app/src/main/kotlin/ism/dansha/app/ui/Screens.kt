@@ -24,6 +24,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.EventRepeat
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.ShoppingBag
+import androidx.compose.material.icons.automirrored.outlined.ShowChart
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.SystemUpdate
@@ -175,8 +178,9 @@ fun MoreScreen(d: DanshaData, vm: MainViewModel, onOpen: (Page) -> Unit) {
                 SectionLabel("จัดการ")
                 MenuRow(Icons.Outlined.AccountBalance, "บัญชี", "เพิ่ม/แก้บัญชี วงเงิน ตัวคำนวณหนี้ (${d.accounts.size} บัญชี)") { onOpen(Page.Accounts) }
                 MenuRow(Icons.Outlined.EventRepeat, "แม่แบบแผนบิล", "รายการที่เกิดทุกรอบ (${d.billTemplates.size} แม่แบบ)") { onOpen(Page.Templates) }
-                Spacer(Modifier.height(4.dp))
-                Text("Shopee · พอร์ต · หมวดหมู่ · ตั้งค่า 60/40 · แจ้งเตือน มาใน Phase 4", color = DanshaColors.Muted, fontSize = 12.sp)
+                MenuRow(Icons.Outlined.ShoppingBag, "Shopee", "บันทึกออเดอร์ · เช็คก่อนซื้อ · สถิติ (${d.shopee.size} ออเดอร์)") { onOpen(Page.Shopee) }
+                MenuRow(Icons.AutoMirrored.Outlined.ShowChart, "พอร์ตลงทุน", "รายการซื้อขาย · อัปเดตราคา · กำไร/ขาดทุน") { onOpen(Page.Port) }
+                MenuRow(Icons.Outlined.Settings, "ตั้งค่า", "หมวดหมู่ · 60/40 · แจ้งเตือน · อัตราแลกเปลี่ยน") { onOpen(Page.Settings) }
             }
         }
         item {

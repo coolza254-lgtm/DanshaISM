@@ -79,8 +79,72 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val update: StateFlow<UpdateState> = _update.asStateFlow()
 
     init {
-        viewModelScope.launch { repo.load() }
+        viewModelScope.launch {
+            repo.load()
+            autoUpdateFx()
+        }
         autoCheckUpdate()
+    }
+
+    // ---------- อัตราแลกเปลี่ยน ----------
+
+    private suspend fun fetchFx(): Map<String, Double> = withContext(Dispatchers.IO) {
+        val sources = listOf(
+            "https://open.er-api.com/v6/latest/THB",
+            "https://api.frankfurter.app/latest?from=THB&to=USD,JPY,CNY",
+        )
+        for (url in sources) {
+            try {
+                val conn = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
+                    connectTimeout = 10_000; readTimeout = 15_000
+                }
+                try {
+                    if (conn.responseCode == 200) {
+                        val rates = ism.dansha.core.engine.FxFeed.parse(conn.inputStream.bufferedReader().use { it.readText() }, Schema.CURRENCIES)
+                        if (rates.isNotEmpty()) return@withContext rates
+                    }
+                } finally {
+                    conn.disconnect()
+                }
+            } catch (_: Exception) {
+                // ลองแหล่งถัดไป
+            }
+        }
+        emptyMap()
+    }
+
+    /** ดึงเรทวันละครั้ง (เงียบๆ ถ้าไม่สำเร็จ) */
+    private suspend fun autoUpdateFx() {
+        val today = Dates.todayStr()
+        val d = repo.data.value ?: return
+        if (d.isEmpty() || prefs.getString("fx_updated", "") == today) return
+        val rates = fetchFx()
+        if (rates.isEmpty()) return
+        try {
+            repo.edit { setFxAuto(rates) }
+            prefs.edit().putString("fx_updated", today).apply()
+        } catch (_: Exception) {
+        }
+    }
+
+    /** ปุ่ม "อัปเดตเรทตอนนี้" ในหน้าตั้งค่า */
+    fun updateFxNow() = viewModelScope.launch {
+        val rates = fetchFx()
+        if (rates.isEmpty()) {
+            _message.value = "ดึงอัตราแลกเปลี่ยนไม่ได้ (ไม่มีอินเทอร์เน็ต?)"
+            return@launch
+        }
+        edit<Unit>(ok = "อัปเดตเรทแล้ว: " + rates.entries.joinToString { "${it.key} ${it.value}" }) { setFxAuto(rates) }
+        prefs.edit().putString("fx_updated", Dates.todayStr()).apply()
+    }
+
+    // ---------- แชร์สรุป ----------
+
+    /** ข้อความสรุปวันนี้ สำหรับแชร์ให้แฟนผ่าน LINE ฯลฯ */
+    fun summaryText(): String? {
+        val d = repo.data.value?.takeIf { !it.isEmpty() } ?: return null
+        val m = ism.dansha.core.engine.Notify.dailySummary(d, Dates.now())
+        return m.title + "\n\n" + m.body
     }
 
     fun clearMessage() {
