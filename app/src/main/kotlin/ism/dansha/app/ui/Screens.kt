@@ -104,9 +104,11 @@ fun ScreenTitle(title: String, subtitle: String? = null, actions: @Composable an
 @Composable
 fun Card(modifier: Modifier = Modifier, padding: androidx.compose.ui.unit.Dp = 16.dp, color: androidx.compose.ui.graphics.Color? = null, content: @Composable () -> Unit) {
     val p = LocalPalette.current
+    // ในหน้าฟอร์มมีขอบ 16dp อยู่แล้ว ไม่ต้องเว้นขอบสมุดซ้ายอีก
+    val inForm = LocalInForm.current
     Column(
         modifier
-            .padding(start = 36.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)
+            .padding(start = if (inForm) 0.dp else 36.dp, end = if (inForm) 0.dp else 16.dp, top = if (inForm) 0.dp else 8.dp, bottom = if (inForm) 0.dp else 8.dp)
             .fillMaxWidth()
             .paperCard(p, color ?: p.card)
             .padding(padding)
@@ -148,17 +150,20 @@ fun brandOf(a: Account?): BrandStyle? {
 /** icon "img:<base64>" = รูปที่ผู้ใช้เลือกเอง */
 fun isImageIcon(icon: String) = icon.startsWith("img:")
 
+/** รูปไอคอนที่ถอดแล้ว เก็บไว้ใช้ซ้ำ (ไม่ต้องถอด base64 ใหม่ทุกครั้งที่วาดรายการ) */
+private val iconCache = android.util.LruCache<String, androidx.compose.ui.graphics.ImageBitmap>(32)
+
+private fun iconBitmap(icon: String): androidx.compose.ui.graphics.ImageBitmap? = iconCache.get(icon) ?: runCatching {
+    val bytes = android.util.Base64.decode(icon.removePrefix("img:"), android.util.Base64.DEFAULT)
+    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+}.getOrNull()?.also { iconCache.put(icon, it) }
+
 /** ไอคอนบัญชีแบบวงกลม: รูปที่เลือกเอง > สีแบรนด์ > อีโมจิ > ตัวอักษรแรก */
 @Composable
 fun AccountBadge(account: Account?, size: Int = 36) {
     val icon = account?.icon.orEmpty()
     if (isImageIcon(icon)) {
-        val bmp = remember(icon) {
-            runCatching {
-                val bytes = android.util.Base64.decode(icon.removePrefix("img:"), android.util.Base64.DEFAULT)
-                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-            }.getOrNull()
-        }
+        val bmp = remember(icon) { iconBitmap(icon) }
         if (bmp != null) {
             androidx.compose.foundation.Image(bmp, contentDescription = null, modifier = Modifier.size(size.dp).clip(CircleShape), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
             return
@@ -203,6 +208,14 @@ fun thaiDate(iso: String): String {
     val m = iso.substring(5, 7).toIntOrNull() ?: return iso
     val day = iso.substring(8, 10).toIntOrNull() ?: return iso
     return "$day ${THAI_MONTHS[m - 1]} ${y + 543}"
+}
+
+/** รอบ "2026-09 Sep-Oct" → "ก.ย.–ต.ค. 69" */
+fun cycleLabel(cycle: String): String {
+    val y = cycle.take(4).toIntOrNull() ?: return cycle
+    val m = cycle.drop(5).take(2).toIntOrNull()?.takeIf { it in 1..12 } ?: return cycle
+    val next = if (m == 12) 1 else m + 1
+    return "${THAI_MONTHS[m - 1]}–${THAI_MONTHS[next - 1]} ${(y + 543) % 100}"
 }
 
 // ---------- เพิ่มเติม ----------

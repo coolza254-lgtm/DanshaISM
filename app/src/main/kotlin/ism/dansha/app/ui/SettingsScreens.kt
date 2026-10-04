@@ -54,11 +54,11 @@ fun SettingsPage(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) {
     val cfg = remember(d) { Engine.config(d) }
     var categories by remember { mutableStateOf(false) }
     // ค่าตั้งค่าที่แก้ในหน้านี้ (บันทึกพร้อมกันตอนกด "บันทึก")
-    val v = remember(d) { mutableStateMapOf<String, String>().apply { putAll(cfg) } }
+    val v = remember { mutableStateMapOf<String, String>().apply { putAll(cfg) } }
     var error by remember { mutableStateOf<String?>(null) }
     var canNotify by remember { mutableStateOf(Notifier.canNotify(context)) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { canNotify = it }
-    val fxManual = remember(d) { mutableStateMapOf<String, String>().apply { d.fx.forEach { put(it.currency, amountText(it.manual_rate)) } } }
+    val fxManual = remember { mutableStateMapOf<String, String>().apply { d.fx.forEach { put(it.currency, amountText(it.manual_rate)) } } }
 
     fun bool(k: String) = v[k] == "true"
 
@@ -180,9 +180,7 @@ private fun CategoriesPage(d: DanshaData, vm: MainViewModel, onClose: () -> Unit
 @Composable
 private fun CategoryLine(c: Category, child: Boolean, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = if (child) 32.dp else 0.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(if (child) 24.dp else 32.dp).background(tint(c.color), CircleShape), contentAlignment = Alignment.Center) {
-            Text(c.icon, fontSize = if (child) 12.sp else 16.sp)
-        }
+        CategoryIcon(c.name, c.icon, c.color, size = if (child) 28.dp else 36.dp)
         Spacer(Modifier.width(10.dp))
         Text(c.name + if (!c.active) " (ปิด)" else "", color = if (c.active) DanshaColors.Ink else DanshaColors.Muted)
     }
@@ -207,8 +205,13 @@ private fun CategoryEditor(d: DanshaData, existing: Category?, type: String, par
 
     FormPage(if (e == null) (if (parent != null) "หมวดย่อยของ ${parent.name}" else "เพิ่มหมวดหลัก") else "แก้ไขหมวด", onClose, ::save) {
         error?.let { Note(it, DanshaColors.Negative) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CategoryIcon(name.ifBlank { parent?.name ?: "" }, icon, color, size = 56.dp)
+            Spacer(Modifier.width(12.dp))
+            Text("ไอคอนเลือกให้อัตโนมัติจากชื่อหมวด", color = DanshaColors.Muted, fontSize = 14.sp)
+        }
         TextInput("ชื่อหมวด", name, { name = it })
-        TextInput("ไอคอน (อีโมจิ)", icon, { icon = it.take(4) })
+        TextInput("อีโมจิสำรอง (ใช้เมื่อแอพไม่รู้จักชื่อหมวด)", icon, { icon = it.take(4) })
         Text("สี", fontWeight = FontWeight.Medium)
         Row(Modifier.horizontalScroll(rememberScrollState())) {
             CAT_COLORS.forEach { hex ->

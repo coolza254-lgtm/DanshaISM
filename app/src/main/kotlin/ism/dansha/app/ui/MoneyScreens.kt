@@ -89,7 +89,7 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
-            ScreenTitle("断捨ISM", c?.let { "รอบ ${it.overview.payCycle.substring(8)}" }) {
+            ScreenTitle("断捨ISM", c?.let { "${greeting()} · รอบ ${cycleLabel(it.overview.payCycle)}" }) {
                 if (c != null) IconButton(onClick = { vm.summaryText()?.let { shareText(ctx, it) } }) {
                     Icon(Icons.Outlined.Share, contentDescription = "แชร์สรุปวันนี้", tint = p.ink)
                 }
@@ -109,7 +109,12 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
             return@LazyColumn
         }
         if (c == null) {
-            item { Text("กำลังคำนวณ…", Modifier.padding(20.dp), color = p.muted) }
+            item {
+                Card {
+                    Text("คำนวณตัวเลขไม่สำเร็จ", fontWeight = FontWeight.SemiBold, color = p.negative)
+                    Text("ข้อมูลยังอยู่ครบ ลองแก้รายการล่าสุด หรือส่งออกไฟล์ข้อมูลแล้วส่งให้ผู้พัฒนาดู", color = p.muted, fontSize = 14.sp)
+                }
+            }
             return@LazyColumn
         }
         val h = c.home
@@ -138,11 +143,10 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
                     )
                     Spacer(Modifier.height(12.dp))
                     DayBoxes(total, passed)
-                    Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-                        Text(thaiDate(ov.payCycleRange.start), Modifier.weight(1f), fontSize = 13.sp, color = p.muted)
-                        Text("วันที่ $passed จาก $total", fontSize = 13.sp, color = p.muted)
-                        Spacer(Modifier.weight(1f))
-                        Text(thaiDate(ov.payCycleRange.end), fontSize = 13.sp, color = p.muted)
+                    Box(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+                        Text(shortThaiDate(ov.payCycleRange.start), Modifier.align(Alignment.CenterStart), fontSize = 13.sp, color = p.muted)
+                        Text("วันที่ $passed / $total", Modifier.align(Alignment.Center), fontSize = 13.sp, color = p.ink, fontWeight = FontWeight.Medium)
+                        Text(shortThaiDate(ov.payCycleRange.end), Modifier.align(Alignment.CenterEnd), fontSize = 13.sp, color = p.muted)
                     }
                 }
                 // เทปวาชิ
@@ -216,6 +220,14 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
         }
     }
     editingTxn?.let { t -> TransactionEditor(d, t, vm) { editingTxn = null } }
+}
+
+/** คำทักตามช่วงเวลา */
+fun greeting(): String = when (java.time.LocalTime.now().hour) {
+    in 5..10 -> "อรุณสวัสดิ์"
+    in 11..15 -> "สวัสดีตอนบ่าย"
+    in 16..19 -> "สวัสดีตอนเย็น"
+    else -> "ราตรีสวัสดิ์"
 }
 
 /** ยอดเงินมีเครื่องหมาย: −฿24.80 / ฿1,402.37 */

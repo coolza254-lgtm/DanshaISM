@@ -83,7 +83,7 @@ fun TransactionsScreen(d: DanshaData, vm: MainViewModel, header: @Composable () 
                             IconButton(onClick = { cycle = Outlook.shiftCycle(cycle, -1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "รอบก่อน") }
                             val (rs, re) = Dates.payCycleRange(cycle, startDay)
                             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("รอบ ${cycle.substring(8)}${if (cycle == current) " (รอบนี้)" else ""}", fontWeight = FontWeight.SemiBold)
+                                Text("รอบ ${cycleLabel(cycle)}${if (cycle == current) " (รอบนี้)" else ""}", fontWeight = FontWeight.SemiBold)
                                 Text("${thaiDate(rs.toString())} – ${thaiDate(re.toString())}", color = DanshaColors.Muted, fontSize = 13.sp)
                             }
                             IconButton(onClick = { cycle = Outlook.shiftCycle(cycle, 1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "รอบถัดไป") }
@@ -136,12 +136,7 @@ fun TransactionRow(
         if (showDate) {
             Text(shortThaiDate(t.date), Modifier.width(48.dp), fontSize = 13.sp, color = p.muted)
         }
-        Box(
-            Modifier.size(32.dp).background(tint(main?.color.orEmpty()), CircleShape).border(1.3.dp, p.ink.copy(alpha = 0.8f), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(if (t.type == "transfer") "⇄" else categoryMark(main?.name ?: "•"), fontFamily = Hand, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = p.ink)
-        }
+        CategoryIcon(cat?.name, cat?.icon, main?.color ?: cat?.color, size = 36.dp, transfer = t.type == "transfer")
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(t.note.ifEmpty { cat?.name ?: if (t.type == "transfer") "โอน" else "-" }, fontSize = 16.sp, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)

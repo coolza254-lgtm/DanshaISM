@@ -137,6 +137,8 @@ val Hand = FontFamily(
     Font(R.font.mali_bold, FontWeight.Bold),
 )
 
+private val AppTypography: Typography by lazy { typography() }
+
 private fun typography(): Typography {
     val t = Typography()
     // ตัวเลขกว้างเท่ากัน (tnum) ให้ยอดเงินเรียงตรงหลัก
@@ -180,7 +182,7 @@ fun DanshaTheme(mode: String = "system", content: @Composable () -> Unit) {
         outline = p.line, outlineVariant = p.line, error = p.negative,
     )
     CompositionLocalProvider(LocalPalette provides p) {
-        MaterialTheme(colorScheme = scheme, typography = typography(), shapes = shapes, content = content)
+        MaterialTheme(colorScheme = scheme, typography = AppTypography, shapes = shapes, content = content)
     }
 }
 

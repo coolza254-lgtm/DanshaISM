@@ -20,6 +20,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // พื้นหน้าต่างตามธีมที่เลือกในแอพ (กันแวบสีกระดาษขาวตอนเปิดแอพในโหมดมืด)
+        val mode = getSharedPreferences("app", MODE_PRIVATE).getString("ui_mode", "system")
+        val nightSystem = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val darkStart = mode == "dark" || (mode == "system" && nightSystem)
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(if (darkStart) 0xFF1E1C1A.toInt() else 0xFFFBF6EA.toInt()))
         setContent {
             val mode by vm.uiMode.collectAsState()
             val dark = isDark(mode)

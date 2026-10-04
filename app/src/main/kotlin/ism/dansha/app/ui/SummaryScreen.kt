@@ -67,7 +67,7 @@ fun SummaryScreen(d: DanshaData, vm: MainViewModel, header: @Composable () -> Un
         item { ScreenTitle("สรุป", "${thaiDate(s.start)} – ${thaiDate(s.end)}") }
         item { header() }
         item {
-            Column(Modifier.padding(horizontal = 16.dp)) {
+            Column(Modifier.padding(start = 36.dp, end = 16.dp)) {
                 ChoiceChips(
                     Summary.Preset.entries.map { it.name to it.label } + ("custom" to "เลือกเอง"),
                     if (custom) "custom" else preset.name,
@@ -121,7 +121,7 @@ fun SummaryScreen(d: DanshaData, vm: MainViewModel, header: @Composable () -> Un
                 list.forEach { CategoryBar(it, if (showIncome) DanshaColors.Positive else DanshaColors.Negative) }
             }
         }
-        item { Text("รายการ (${s.transactions.size})", Modifier.padding(start = 20.dp, top = 8.dp), fontWeight = FontWeight.SemiBold) }
+        item { SectionHeader("รายการ (${s.transactions.size})") }
         val accounts = d.accounts.associateBy { it.id }
         val categories = d.categories.associateBy { it.id }
         s.transactions.groupBy { it.date }.forEach { (date, list) ->
@@ -140,7 +140,7 @@ private fun CategoryBar(c: CategoryTotal, barColor: androidx.compose.ui.graphics
     var open by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().clickable(enabled = c.children.isNotEmpty()) { open = !open }.padding(vertical = 5.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(26.dp).background(tint(c.color), CircleShape), contentAlignment = Alignment.Center) { Text(c.icon, fontSize = 13.sp) }
+            CategoryIcon(c.name, c.icon, c.color, size = 28.dp)
             Spacer(Modifier.width(8.dp))
             Text(c.name + if (c.children.isNotEmpty()) (if (open) " ▴" else " ▾") else "", Modifier.weight(1f), fontSize = 14.sp)
             Text("${money(c.amount)} · ${c.share}%", fontSize = 13.sp)

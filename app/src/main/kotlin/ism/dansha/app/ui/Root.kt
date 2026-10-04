@@ -36,6 +36,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.toMutableStateList
+import androidx.compose.runtime.key
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,15 +73,27 @@ enum class Page { More, Accounts, Templates, Shopee, Port, Settings }
 
 @Composable
 fun DanshaRoot(vm: MainViewModel) {
-    val data by vm.data.collectAsState()
-    val computed by vm.computed.collectAsState()
+    val ui by vm.ui.collectAsState()
     val message by vm.message.collectAsState()
     val update by vm.update.collectAsState()
     val pending by vm.pendingImport.collectAsState()
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
-    var page by rememberSaveable { mutableStateOf<Page?>(null) }
+    // กองหน้าซ้อน: เปิดหน้าใหม่ทับ (หน้าเดิมยังอยู่ข้างใต้) ย้อนกลับ = ปิดหน้าบนสุด
+    val pages = rememberSaveable(saver = listSaver(save = { l -> l.map { it.name } }, restore = { l -> l.map(Page::valueOf).toMutableStateList() })) {
+        mutableStateListOf<Page>()
+    }
+    fun open(p: Page) {
+        val i = pages.indexOf(p)
+        if (i >= 0) while (pages.size > i + 1) pages.removeAt(pages.lastIndex) else pages.add(p)
+    }
+    fun back() { if (pages.isNotEmpty()) pages.removeAt(pages.lastIndex) }
     var adding by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
+    val overlay = remember { OverlayHostState() }
+    val tabStates = rememberSaveableStateHolder()
+
+    val data = ui.computed?.data ?: ui.data
+    val computed = ui.computed
 
     // ขออนุญาตแจ้งเตือนครั้งแรก (Android 13+) — ปฏิเสธแล้วเปิดทีหลังได้ในหน้าตั้งค่า
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -88,46 +112,70 @@ fun DanshaRoot(vm: MainViewModel) {
 
     LaunchedEffect(message) {
         message?.let {
-            snackbar.showSnackbar(it)
             vm.clearMessage()
+            snackbar.currentSnackbarData?.dismiss()
+            snackbar.showSnackbar(it)
         }
     }
 
     val hasData = data?.isEmpty() == false
-    CompositionLocalProvider(LocalOpenMore provides { page = Page.More }) {
-        Scaffold(
-            containerColor = LocalPalette.current.bg,
-            snackbarHost = { SnackbarHost(snackbar) },
-            bottomBar = { BottomBar(tab, { tab = it }, onAdd = { if (hasData) adding = true else vm.toast("นำเข้าข้อมูลหรือกดเริ่มใหม่ก่อน") }) },
-        ) { padding ->
-            Box(Modifier.fillMaxSize().padding(padding).notebookPaper(LocalPalette.current)) {
-                val d = data
-                if (d == null) {
-                    CircularProgressIndicator(Modifier.align(Alignment.Center))
-                } else {
-                    when (tab) {
-                        Tab.Home -> HomeScreen(d, computed, vm, onOpenDebt = { tab = Tab.Debt }, onOpenTransactions = { tab = Tab.Transactions })
-                        Tab.Transactions -> TransactionsTab(d, vm)
-                        Tab.Plan -> PlanScreen(d, computed, vm, onOpenTemplates = { page = Page.Templates })
-                        Tab.Debt -> DebtScreen(d, computed, vm)
+    CompositionLocalProvider(LocalOpenMore provides { open(Page.More) }, LocalOverlayHost provides overlay) {
+        Box(Modifier.fillMaxSize().background(LocalPalette.current.bg)) {
+            Scaffold(
+                containerColor = LocalPalette.current.bg,
+                bottomBar = { BottomBar(tab, { tab = it }, onAdd = { if (hasData) adding = true else vm.toast("นำเข้าข้อมูลหรือกดเริ่มใหม่ก่อน") }) },
+            ) { padding ->
+                Box(Modifier.fillMaxSize().padding(padding).notebookPaper(LocalPalette.current)) {
+                    if (data == null) {
+                        CircularProgressIndicator(Modifier.align(Alignment.Center), color = LocalPalette.current.primary)
+                    } else {
+                        // สลับแท็บแบบจางเข้า-ออกสั้นๆ และจำตำแหน่งเลื่อนของแต่ละแท็บไว้
+                        AnimatedContent(
+                            targetState = tab,
+                            transitionSpec = { fadeIn(tween(180, delayMillis = 40)) togetherWith fadeOut(tween(120)) },
+                            label = "tab",
+                        ) { t ->
+                            tabStates.SaveableStateProvider(t.name) {
+                                when (t) {
+                                    Tab.Home -> HomeScreen(data, computed, vm, onOpenDebt = { tab = Tab.Debt }, onOpenTransactions = { tab = Tab.Transactions })
+                                    Tab.Transactions -> TransactionsTab(data, vm)
+                                    Tab.Plan -> PlanScreen(data, computed, vm, onOpenTemplates = { open(Page.Templates) })
+                                    Tab.Debt -> DebtScreen(data, computed, vm)
+                                }
+                            }
+                        }
                     }
                 }
             }
-        }
-    }
 
-    // หน้าที่เปิดซ้อน
-    data?.let { d ->
-        when (page) {
-            Page.More -> OverlayPage("เพิ่มเติม", { page = null }) { MoreScreen(d, vm, onOpen = { page = it }) }
-            Page.Accounts -> AccountsPage(d, computed, vm) { page = Page.More }
-            Page.Templates -> TemplatesPage(d, vm) { page = null }
-            Page.Shopee -> ShopeePage(d, computed, vm) { page = Page.More }
-            Page.Port -> PortPage(d, vm) { page = Page.More }
-            Page.Settings -> SettingsPage(d, vm) { page = Page.More }
-            null -> Unit
+            // หน้าซ้อน (วาดใน OverlayHost ด้านล่าง)
+            if (data != null) {
+                pages.forEach { p ->
+                    key(p) {
+                        when (p) {
+                            Page.More -> OverlayPage("เพิ่มเติม", ::back) { MoreScreen(data, vm, onOpen = ::open) }
+                            Page.Accounts -> AccountsPage(data, computed, vm, ::back)
+                            Page.Templates -> TemplatesPage(data, vm, ::back)
+                            Page.Shopee -> ShopeePage(data, computed, vm, ::back)
+                            Page.Port -> PortPage(data, vm, ::back)
+                            Page.Settings -> SettingsPage(data, vm, ::back)
+                        }
+                    }
+                }
+                if (adding) TransactionEditor(data, null, vm) { adding = false }
+            }
+            OverlayHost(overlay)
+
+            // ข้อความแจ้ง: อยู่บนสุดเสมอ (เห็นได้แม้เปิดหน้าซ้อนอยู่)
+            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(bottom = 76.dp)) { s ->
+                val p = LocalPalette.current
+                Text(
+                    s.visuals.message,
+                    Modifier.padding(horizontal = 24.dp).paperCard(p, p.ink).padding(horizontal = 16.dp, vertical = 12.dp),
+                    color = p.card, fontSize = 15.sp, fontWeight = FontWeight.Medium,
+                )
+            }
         }
-        if (adding) TransactionEditor(d, null, vm) { adding = false }
     }
 
     UpdateDialog(update, vm)
@@ -164,10 +212,11 @@ private fun TabItem(t: Tab, selected: Boolean, modifier: Modifier, onClick: () -
         modifier.fillMaxSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
     ) {
+        val mark by animateColorAsState(if (selected) p.highlight else p.highlight.copy(alpha = 0f), tween(220), label = "tabMark")
         Icon(t.icon, contentDescription = null, tint = if (selected) p.ink else p.muted, modifier = Modifier.size(22.dp))
         Text(
             t.label,
-            Modifier.background(if (selected) p.highlight else Color.Transparent, RoundedCornerShape(3.dp)).padding(horizontal = 8.dp),
+            Modifier.background(mark, RoundedCornerShape(3.dp)).padding(horizontal = 8.dp),
             fontSize = 13.sp, color = if (selected) p.ink else p.muted, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
         )
     }
@@ -178,7 +227,7 @@ private fun TabItem(t: Tab, selected: Boolean, modifier: Modifier, onClick: () -
 private fun TransactionsTab(d: DanshaData, vm: MainViewModel) {
     var summary by rememberSaveable { mutableStateOf(false) }
     val header: @Composable () -> Unit = {
-        Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+        Box(Modifier.padding(start = 36.dp, end = 16.dp, top = 4.dp, bottom = 4.dp)) {
             ChoiceChips(listOf(false to "รายการ", true to "สรุป"), summary, { summary = it })
         }
     }

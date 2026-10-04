@@ -189,7 +189,7 @@ private fun DebtAccountCard(d: DanshaData, acc: Account, st: DebtState, onAction
 
 @Composable
 private fun PayDebtPage(d: DanshaData, c: MainViewModel.Computed?, accountId: String, vm: MainViewModel, onClose: () -> Unit) {
-    val acc = d.accounts.first { it.id == accountId }
+    val acc = d.accounts.firstOrNull { it.id == accountId } ?: run { androidx.compose.runtime.LaunchedEffect(Unit) { onClose() }; return }
     val st = c?.debts?.get(accountId)
     val suggested = st?.currentBill?.amount ?: st?.nextBill?.totalDue
     var amount by remember { mutableStateOf(amountText(suggested)) }
@@ -199,7 +199,9 @@ private fun PayDebtPage(d: DanshaData, c: MainViewModel.Computed?, accountId: St
     var note by remember { mutableStateOf("จ่าย ${acc.name}") }
     var error by remember { mutableStateOf<String?>(null) }
     val amt = Forms.parseAmount(amount)
-    val quote = if (isEngineAccount(acc) && amt != null && amt > 0) runCatching { Engine.debtQuote(d, accountId, date, amt) }.getOrNull() else null
+    val quote = remember(d, accountId, date, amt) {
+        if (isEngineAccount(acc) && amt != null && amt > 0) runCatching { Engine.debtQuote(d, accountId, date, amt) }.getOrNull() else null
+    }
 
     fun save() {
         val src = d.accounts.firstOrNull { it.id == from }
@@ -234,10 +236,11 @@ private fun PayDebtPage(d: DanshaData, c: MainViewModel.Computed?, accountId: St
 
 @Composable
 private fun QuotePage(d: DanshaData, accountId: String, onClose: () -> Unit) {
-    val acc = d.accounts.first { it.id == accountId }
+    val acc = d.accounts.firstOrNull { it.id == accountId } ?: run { androidx.compose.runtime.LaunchedEffect(Unit) { onClose() }; return }
     var date by remember { mutableStateOf(Dates.todayStr()) }
     var amount by remember { mutableStateOf("") }
-    val q = runCatching { Engine.debtQuote(d, accountId, date, Forms.parseAmount(amount)) }.getOrNull()
+    val tryAmount = Forms.parseAmount(amount)
+    val q = remember(d, accountId, date, tryAmount) { runCatching { Engine.debtQuote(d, accountId, date, tryAmount) }.getOrNull() }
     FormPage("ยอดปิด ${acc.name}", onClose, onSave = null) {
         DateField("ถ้าจ่ายวันที่", date, { date = it })
         if (q != null) {
@@ -265,7 +268,7 @@ private fun QuotePage(d: DanshaData, accountId: String, onClose: () -> Unit) {
 
 @Composable
 private fun CashDrawPage(d: DanshaData, accountId: String, vm: MainViewModel, onClose: () -> Unit) {
-    val acc = d.accounts.first { it.id == accountId }
+    val acc = d.accounts.firstOrNull { it.id == accountId } ?: run { androidx.compose.runtime.LaunchedEffect(Unit) { onClose() }; return }
     val min = (acc.tenor_min ?: 0).let { if (it == 0) 2 else it }
     val max = (acc.tenor_max ?: 0).let { if (it == 0) 24 else it }
     var amount by remember { mutableStateOf("") }
@@ -306,7 +309,7 @@ private fun jsPct(rate: Double): String = BigDecimal.valueOf(rate * 100).stripTr
 @Composable
 private fun DebtEditor(d: DanshaData, accountId: String, existing: Debt?, vm: MainViewModel, onClose: () -> Unit) {
     val e = existing
-    val acc = d.accounts.first { it.id == accountId }
+    val acc = d.accounts.firstOrNull { it.id == accountId } ?: run { androidx.compose.runtime.LaunchedEffect(Unit) { onClose() }; return }
     var kind by remember { mutableStateOf(e?.kind ?: "cash") }
     var date by remember { mutableStateOf(e?.txn_date ?: Dates.todayStr()) }
     var desc by remember { mutableStateOf(e?.description.orEmpty()) }

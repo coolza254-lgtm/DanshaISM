@@ -62,7 +62,7 @@ fun PlanScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
     val cashNow = c?.overview?.cashNow ?: 0.0
     val rows = d.bills.filter { it.pay_cycle == cycle }.sortedWith(compareBy({ it.sort ?: Int.MAX_VALUE }, { it.due_date.ifEmpty { "9999" } }, { it.name }))
     val summary = Plan.summary(cycle, d.bills, cashNow)
-    val outlook = remember(d) { runCatching { Engine.outlook(d, 6) }.getOrNull() }
+    val outlook = c?.outlook
 
     LazyColumn(Modifier.fillMaxSize()) {
         item { ScreenTitle("แผนบิล") }
@@ -71,7 +71,7 @@ fun PlanScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
                 IconButton(onClick = { cycle = Outlook.shiftCycle(cycle, -1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "รอบก่อน") }
                 val (rs, re) = Dates.payCycleRange(cycle, startDay)
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("รอบ ${cycle.substring(8)}${if (cycle == current) " (รอบนี้)" else ""}", fontWeight = FontWeight.SemiBold)
+                    Text("รอบ ${cycleLabel(cycle)}${if (cycle == current) " (รอบนี้)" else ""}", fontWeight = FontWeight.SemiBold)
                     Text("${thaiDate(rs.toString())} – ${thaiDate(re.toString())}", color = DanshaColors.Muted, fontSize = 13.sp)
                 }
                 IconButton(onClick = { cycle = Outlook.shiftCycle(cycle, 1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "รอบถัดไป") }
@@ -121,7 +121,7 @@ fun PlanScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
                     cycles.forEach { o ->
                         Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
                             Column(Modifier.weight(1f)) {
-                                Text(o.cycle.substring(8) + if (o.cycle == current) " (รอบนี้)" else "", fontSize = 14.sp)
+                                Text(cycleLabel(o.cycle) + if (o.cycle == current) " (รอบนี้)" else "", fontSize = 14.sp)
                                 Text(
                                     "รับ ${money(o.income)} · แผน ${money(o.planned)} · หนี้ ${money(o.debtDue)}" + if (!o.fromPlan) " · จากแม่แบบ" else "",
                                     color = DanshaColors.Muted, fontSize = 13.sp,
@@ -202,7 +202,7 @@ private fun BillPage(d: DanshaData, b: Bill, vm: MainViewModel, onClose: () -> U
         Note(
             listOfNotNull(
                 GROUPS.firstOrNull { it.first == b.group }?.second,
-                "รอบ ${b.pay_cycle.drop(8)}",
+                "รอบ ${cycleLabel(b.pay_cycle)}",
                 b.due_date.takeIf { it.isNotEmpty() }?.let { "ครบ ${thaiDate(it)}" },
                 "ประมาณ ${formatMoney(b.est_amount)}",
             ).joinToString(" · "),
@@ -263,7 +263,7 @@ fun BillEditor(d: DanshaData, existing: Bill?, cycle: String, vm: MainViewModel,
         }
     }
 
-    FormPage(if (e == null) "เพิ่มแผน (รอบ ${cycle.drop(8)})" else "แก้ไขแผน", onClose, ::save) {
+    FormPage(if (e == null) "เพิ่มแผน (รอบ ${cycleLabel(cycle)})" else "แก้ไขแผน", onClose, ::save) {
         error?.let { Note(it, DanshaColors.Negative) }
         BillFields(d, group, { group = it }, name, { name = it }, est, { est = it }, accountId, { accountId = it }, toAccountId, { toAccountId = it }, categoryId, { categoryId = it })
         if (e?.status == "paid") AmountField("ยอดจริงที่จ่ายแล้ว", actual, { actual = it }, supporting = "แก้แล้วรายการที่ผูกไว้จะแก้ตาม")

@@ -51,23 +51,38 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     val data: StateFlow<DanshaData?> = repo.data
 
-    /** ตัวเลขที่คำนวณแล้ว (คำนวณใหม่ทุกครั้งที่ข้อมูลเปลี่ยน) */
-    data class Computed(val overview: Overview, val home: HomeFigures, val debts: Map<String, DebtState>)
+    /**
+     * ตัวเลขที่คำนวณแล้ว (คำนวณใหม่ทุกครั้งที่ข้อมูลเปลี่ยน บนเธรดเบื้องหลัง)
+     * เก็บ data ชุดที่ใช้คำนวณไว้ด้วย หน้าจอจึงเห็นข้อมูลกับตัวเลขที่ตรงกันเสมอ (ไม่กระพริบเลขเก่า/ใหม่สลับกัน)
+     */
+    data class Computed(
+        val data: DanshaData,
+        val overview: Overview,
+        val home: HomeFigures,
+        val debts: Map<String, DebtState>,
+        val outlook: List<ism.dansha.core.engine.CycleOutlook>?,
+    )
 
-    val computed: StateFlow<Computed?> = repo.data
+    /** สถานะหน้าจอ: loading = ยังโหลดไม่เสร็จ, computed = null เมื่อไม่มีข้อมูลหรือคำนวณไม่ได้ */
+    data class Ui(val loading: Boolean, val data: DanshaData?, val computed: Computed?, val failed: Boolean = false)
+
+    val ui: StateFlow<Ui> = repo.data
         .map { d ->
-            d?.takeIf { !it.isEmpty() }?.let {
-                try {
-                    val ov = Engine.overview(it)
-                    Computed(ov, Home.figures(ov), Engine.debtStates(it, ov.today, withSchedule = true))
+            when {
+                d == null -> Ui(loading = true, data = null, computed = null)
+                d.isEmpty() -> Ui(loading = false, data = d, computed = null)
+                else -> try {
+                    val ov = Engine.overview(d)
+                    val outlook = runCatching { Engine.outlook(d, 6) }.getOrNull()
+                    Ui(false, d, Computed(d, ov, Home.figures(ov), Engine.debtStates(d, ov.today, withSchedule = true), outlook))
                 } catch (e: Exception) {
                     android.util.Log.e("Dansha", "คำนวณไม่สำเร็จ", e)
-                    null
+                    Ui(false, d, null, failed = true)
                 }
             }
         }
         .flowOn(Dispatchers.Default)
-        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, Ui(loading = true, data = null, computed = null))
 
     /** ธีม: system | light | dark (เก็บในเครื่อง ไม่อยู่ในไฟล์ข้อมูล) */
     private val _uiMode = MutableStateFlow(prefs.getString("ui_mode", "system") ?: "system")

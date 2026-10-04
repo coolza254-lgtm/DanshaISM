@@ -210,11 +210,11 @@ fun CheckPurchasePage(d: DanshaData, onClose: () -> Unit) {
     var installment by remember { mutableStateOf("") }
     var date by remember { mutableStateOf(Dates.todayStr()) }
     val p = Forms.parseAmount(price)
-    val result: Result<PurchaseCheck>? = if (p != null && p > 0) runCatching {
-        Engine.checkPurchase(
-            d, PurchaseQuery(p, method, tenor.toIntOrNull(), Forms.parseAmount(installment), null, date),
-        )
-    } else null
+    val result: Result<PurchaseCheck>? = remember(d, p, method, tenor, installment, date) {
+        if (p != null && p > 0) runCatching {
+            Engine.checkPurchase(d, PurchaseQuery(p, method, tenor.toIntOrNull(), Forms.parseAmount(installment), null, date))
+        } else null
+    }
 
     FormPage("เช็คก่อนซื้อ", onClose, onSave = null) {
         AmountField("ราคา", price, { price = it })
@@ -234,13 +234,14 @@ fun CheckPurchasePage(d: DanshaData, onClose: () -> Unit) {
 
 @Composable
 private fun CheckResult(r: PurchaseCheck) {
+    val pal = LocalPalette.current
     val (bg, label) = when (r.verdict) {
-        "red" -> Color(0xFFFDE2E2) to "ไม่ควรซื้อตอนนี้"
-        "yellow" -> Color(0xFFFFF4D6) to "ซื้อได้ แต่ระวัง"
-        else -> Color(0xFFE2F5E7) to "ซื้อได้"
+        "red" -> pal.negativeSoft to "ไม่ควรซื้อตอนนี้"
+        "yellow" -> pal.warningSoft to "ซื้อได้ แต่ระวัง"
+        else -> pal.positiveSoft to "ซื้อได้"
     }
-    Column(Modifier.fillMaxWidth().background(bg, RoundedCornerShape(12.dp)).padding(14.dp)) {
-        Text(label, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+    Column(Modifier.fillMaxWidth().paperCard(pal, bg).padding(14.dp)) {
+        Text(label, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = pal.ink)
         r.flags.forEach { f ->
             Text("• ${f.text}", color = if (f.level == "red") DanshaColors.Negative else DanshaColors.Ink, fontSize = 14.sp)
         }
@@ -250,12 +251,12 @@ private fun CheckResult(r: PurchaseCheck) {
         SectionLabel("ผลกระทบแต่ละรอบ (คงเหลือ → หลังซื้อ)")
         r.impact.forEach { c ->
             Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(c.cycle.drop(8) + if (c.extra > 0) " (−${money(c.extra)})" else "", Modifier.weight(1f), fontSize = 13.sp)
+                Text(cycleLabel(c.cycle) + if (c.extra > 0) " (−${money(c.extra)})" else "", Modifier.weight(1f), fontSize = 13.sp)
                 Text("${money(c.remaining)} → ", color = DanshaColors.Muted, fontSize = 13.sp)
                 Text(money(c.after), color = if (c.after < 0) DanshaColors.Negative else DanshaColors.Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             }
         }
-        if (r.laterCycles.isNotEmpty()) Note("มีค่างวดในรอบหลังจากนี้อีก: ${r.laterCycles.joinToString { it.drop(8) }}")
+        if (r.laterCycles.isNotEmpty()) Note("มีค่างวดในรอบหลังจากนี้อีก: ${r.laterCycles.joinToString { cycleLabel(it) }}")
         r.maxBurden?.let { Note("ภาระค่างวดหนี้สูงสุด $it% ของรายรับ") }
     }
     Card {

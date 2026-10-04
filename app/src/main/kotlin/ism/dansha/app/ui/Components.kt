@@ -54,8 +54,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.background
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.text.style.TextOverflow
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
@@ -64,6 +66,24 @@ import java.time.ZoneOffset
 /*
  * ชิ้นส่วนฟอร์มที่ใช้ทั้งแอพ — เปลี่ยนหน้าตาที่นี่ที่เดียวตอนออกแบบ UI ใหม่
  */
+
+/** หัวหน้าซ้อน: ย้อนกลับ + ชื่อ (ลายมือ) + ปุ่มขวา แล้วเส้นหมึกคั่น */
+@Composable
+private fun PageHeader(title: String, onBack: () -> Unit, actions: @Composable () -> Unit = {}) {
+    val p = LocalPalette.current
+    Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "ย้อนกลับ", tint = p.ink) }
+        Text(
+            title, Modifier.weight(1f), fontFamily = Hand, fontSize = 22.sp, fontWeight = FontWeight.Bold,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, color = p.primary,
+        )
+        actions()
+    }
+    Box(Modifier.fillMaxWidth().height(1.5.dp).background(p.ink.copy(alpha = if (p.dark) 0.5f else 0.85f)))
+}
+
+/** อยู่ในหน้าฟอร์ม (Card ไม่ต้องเว้นขอบสมุดซ้าย 36dp) */
+internal val LocalInForm = staticCompositionLocalOf { false }
 
 /** หน้าฟอร์มเต็มจอ: หัว (ย้อนกลับ + ชื่อ + ปุ่มบันทึก) + เนื้อหาเลื่อนได้ */
 @Composable
@@ -75,22 +95,25 @@ fun FormPage(
     saveEnabled: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        Surface(Modifier.fillMaxSize(), color = LocalPalette.current.bg) {
+    Overlay(onDismiss) {
+        val p = LocalPalette.current
+        Surface(Modifier.fillMaxSize(), color = p.bg) {
             Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "ย้อนกลับ", tint = DanshaColors.Ink) }
-                    Text(title, Modifier.weight(1f), fontSize = 19.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, color = DanshaColors.Ink)
+                PageHeader(title, onDismiss) {
                     if (onSave != null) {
-                        Button(onClick = onSave, enabled = saveEnabled, modifier = Modifier.padding(end = 8.dp)) { Text(saveLabel) }
+                        Button(
+                            onClick = onSave, enabled = saveEnabled, shape = RoundedCornerShape(8.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.5.dp, p.ink.copy(alpha = if (p.dark) 0.5f else 1f)),
+                        ) { Text(saveLabel, fontWeight = FontWeight.SemiBold) }
                     }
                 }
-                HorizontalDivider(color = DanshaColors.Line)
-                Column(
-                    Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    content = content,
-                )
+                CompositionLocalProvider(LocalInForm provides true) {
+                    Column(
+                        Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        content = content,
+                    )
+                }
             }
         }
     }
@@ -238,17 +261,15 @@ fun DeleteButton(what: String, onDelete: () -> Unit) {
     if (ask) ConfirmDialog("ลบ$what?", "ลบแล้วกู้คืนไม่ได้", "ลบ", onDelete, { ask = false })
 }
 
-/** หน้าเต็มจอที่เนื้อหาเลื่อนเอง (เช่นมี LazyColumn) */
+/** หน้าเต็มจอที่เนื้อหาเลื่อนเอง (เช่นมี LazyColumn) — พื้นกระดาษสมุดเหมือนแท็บหลัก */
 @Composable
 fun OverlayPage(title: String, onDismiss: () -> Unit, content: @Composable () -> Unit) {
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        Surface(Modifier.fillMaxSize(), color = LocalPalette.current.bg) {
+    Overlay(onDismiss) {
+        val p = LocalPalette.current
+        Surface(Modifier.fillMaxSize(), color = p.bg) {
             Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "ย้อนกลับ", tint = DanshaColors.Ink) }
-                    Text(title, Modifier.weight(1f), fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = DanshaColors.Ink)
-                }
-                Box(Modifier.fillMaxWidth().weight(1f)) { content() }
+                PageHeader(title, onDismiss)
+                Box(Modifier.fillMaxWidth().weight(1f).notebookPaper(p)) { content() }
             }
         }
     }
