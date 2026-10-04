@@ -60,8 +60,8 @@ fun PlanScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
     var open by remember { mutableStateOf<Bill?>(null) }
     var creating by remember { mutableStateOf(false) }
     val cashNow = c?.overview?.cashNow ?: 0.0
-    val rows = d.bills.filter { it.pay_cycle == cycle }.sortedWith(compareBy({ it.sort ?: Int.MAX_VALUE }, { it.due_date.ifEmpty { "9999" } }, { it.name }))
-    val summary = Plan.summary(cycle, d.bills, cashNow)
+    val rows = remember(d, cycle) { d.bills.filter { it.pay_cycle == cycle }.sortedWith(compareBy({ it.sort ?: Int.MAX_VALUE }, { it.due_date.ifEmpty { "9999" } }, { it.name })) }
+    val summary = remember(d, cycle, cashNow) { Plan.summary(cycle, d.bills, cashNow) }
     val outlook = c?.outlook
 
     LazyColumn(Modifier.fillMaxSize()) {

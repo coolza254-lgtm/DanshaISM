@@ -86,6 +86,11 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
         uri?.let { vm.pickImport(it) }
     }
     var editingTxn by remember { mutableStateOf<Transaction?>(null) }
+    // คำนวณครั้งเดียวต่อข้อมูลชุดหนึ่ง (ไม่ทำซ้ำทุกครั้งที่หน้าวาดใหม่)
+    val recent = remember(d) { d.transactions.sortedWith(compareByDescending<Transaction> { it.date }.thenByDescending { it.created_at }).take(6) }
+    val accs = remember(d) { d.accounts.associateBy { it.id } }
+    val cats = remember(d) { d.categories.associateBy { it.id } }
+    val activeAccounts = remember(c) { c?.overview?.accounts?.filter { it.account.active }?.sortedWith(compareBy({ it.account.sort ?: Int.MAX_VALUE }, { it.account.name })).orEmpty() }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
@@ -204,18 +209,15 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
         item { SectionHeader("บัญชี") }
         item {
             LazyRow(contentPadding = PaddingValues(start = 36.dp, end = 16.dp, top = 4.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(ov.accounts.filter { it.account.active }.sortedWith(compareBy({ it.account.sort ?: Int.MAX_VALUE }, { it.account.name })), key = { it.account.id }) { a ->
+                items(activeAccounts, key = { it.account.id }) { a ->
                     AccountCard(a)
                 }
             }
         }
 
         // จดล่าสุด
-        val recent = d.transactions.sortedWith(compareByDescending<Transaction> { it.date }.thenByDescending { it.created_at }).take(6)
         if (recent.isNotEmpty()) {
             item { SectionHeader("จดล่าสุด", "ดูทั้งเล่ม ›", onOpenTransactions) }
-            val accs = d.accounts.associateBy { it.id }
-            val cats = d.categories.associateBy { it.id }
             recent.forEach { t -> item(key = "r_${t.id}") { TransactionRow(t, accs, cats, showDate = true) { editingTxn = t } } }
         }
     }

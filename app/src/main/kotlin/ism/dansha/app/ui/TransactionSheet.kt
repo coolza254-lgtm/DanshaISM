@@ -105,7 +105,6 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     val focus = LocalFocusManager.current
-    val haptic = LocalHapticFeedback.current
     val amountFocus = remember { FocusRequester() }
     // ปิดแบบเลื่อนลงนุ่มๆ (ไม่หายวับ)
     fun close() {
@@ -153,7 +152,7 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
         vm.edit<Any>(
             ok = if (e == null) "จดแล้ว ✓" else "แก้แล้ว ✓",
             onError = { error = it; saving = false },
-            onOk = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); close() },
+            onOk = { close() },
         ) {
             if (e == null) createTransaction(row, copayFlag) else updateTransaction(row, copayFlag)
         }

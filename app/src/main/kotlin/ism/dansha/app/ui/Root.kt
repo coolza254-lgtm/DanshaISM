@@ -77,6 +77,7 @@ fun DanshaRoot(vm: MainViewModel) {
     val message by vm.message.collectAsState()
     val update by vm.update.collectAsState()
     val pending by vm.pendingImport.collectAsState()
+    val saved by vm.saved.collectAsState()
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
     // กองหน้าซ้อน: เปิดหน้าใหม่ทับ (หน้าเดิมยังอยู่ข้างใต้) ย้อนกลับ = ปิดหน้าบนสุด
     val pages = rememberSaveable(saver = listSaver<androidx.compose.runtime.snapshots.SnapshotStateList<Page>, String>(save = { l -> l.map { it.name } }, restore = { l -> l.map(Page::valueOf).toMutableStateList() })) {
@@ -165,6 +166,7 @@ fun DanshaRoot(vm: MainViewModel) {
                 if (adding) TransactionEditor(data, null, vm) { adding = false }
             }
             OverlayHost(overlay)
+            SavedPopup(saved) { vm.clearSaved(it) }
 
             // ข้อความแจ้ง: อยู่บนสุดเสมอ (เห็นได้แม้เปิดหน้าซ้อนอยู่)
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(bottom = 76.dp)) { s ->

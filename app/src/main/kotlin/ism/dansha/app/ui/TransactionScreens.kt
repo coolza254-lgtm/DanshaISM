@@ -68,8 +68,9 @@ fun TransactionsScreen(d: DanshaData, vm: MainViewModel, header: @Composable () 
         (if (searching) Forms.search(d, query) else d.transactions.filter { it.pay_cycle == cycle })
             .sortedWith(compareByDescending<Transaction> { it.date }.thenByDescending { it.created_at })
     }
-    val income = rows.filter { it.type == "income" }.sumOf { it.amount ?: BigDecimal.ZERO }
-    val expense = rows.filter { it.type == "expense" }.sumOf { it.amount ?: BigDecimal.ZERO }
+    val income = remember(rows) { rows.filter { it.type == "income" }.sumOf { it.amount ?: BigDecimal.ZERO } }
+    val expense = remember(rows) { rows.filter { it.type == "expense" }.sumOf { it.amount ?: BigDecimal.ZERO } }
+    val byDay = remember(rows) { rows.groupBy { it.date } }
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize()) {
@@ -96,12 +97,12 @@ fun TransactionsScreen(d: DanshaData, vm: MainViewModel, header: @Composable () 
                 }
             }
             if (rows.isEmpty()) item { Text(if (searching) "ไม่พบรายการ" else "ยังไม่มีรายการในรอบนี้", Modifier.padding(start = 36.dp, end = 16.dp, top = 16.dp, bottom = 16.dp), color = DanshaColors.Muted) }
-            rows.groupBy { it.date }.forEach { (date, list) ->
+            byDay.forEach { (date, list) ->
                 item(key = "h_$date") {
                     val net = list.sumOf { t -> when (t.type) { "income" -> t.amount ?: BigDecimal.ZERO; "expense" -> (t.amount ?: BigDecimal.ZERO).negate(); else -> BigDecimal.ZERO } }
                     DayHeader(thaiDate(date), (if (net.signum() < 0) "−" else if (net.signum() > 0) "+" else "") + formatMoney(net.abs()))
                 }
-                items(list, key = { it.id }) { t ->
+                items(list, key = { it.id }, contentType = { "txn" }) { t ->
                     TransactionRow(t, accounts, categories) { editing = t }
                 }
             }

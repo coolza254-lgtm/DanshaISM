@@ -62,6 +62,8 @@ fun SummaryScreen(d: DanshaData, vm: MainViewModel, header: @Composable () -> Un
     val s = remember(d, s0, e0) { Summary.period(d, minOf(s0, e0), maxOf(s0, e0)) }
     var showIncome by rememberSaveable { mutableStateOf(false) }
     var editing by remember { mutableStateOf<Transaction?>(null) }
+    val accounts = remember(d) { d.accounts.associateBy { it.id } }
+    val categories = remember(d) { d.categories.associateBy { it.id } }
 
     LazyColumn(Modifier.fillMaxSize()) {
         item { ScreenTitle("สรุป", "${thaiDate(s.start)} – ${thaiDate(s.end)}") }
@@ -122,8 +124,6 @@ fun SummaryScreen(d: DanshaData, vm: MainViewModel, header: @Composable () -> Un
             }
         }
         item { SectionHeader("รายการ (${s.transactions.size})") }
-        val accounts = d.accounts.associateBy { it.id }
-        val categories = d.categories.associateBy { it.id }
         s.transactions.groupBy { it.date }.forEach { (date, list) ->
             item(key = "h_$date") {
                 DayHeader(thaiDate(date))

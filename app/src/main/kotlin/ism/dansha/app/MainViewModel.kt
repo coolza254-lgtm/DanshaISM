@@ -93,6 +93,31 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _uiMode.value = mode
     }
 
+    /** ป๊อปอัป "บันทึกสำเร็จ" + ติ๊กถูก (เปิด/ปิดได้ในตั้งค่า เก็บในเครื่อง) */
+    data class Saved(val id: Long, val text: String)
+
+    private val _saved = MutableStateFlow<Saved?>(null)
+    val saved: StateFlow<Saved?> = _saved.asStateFlow()
+    private var savedSeq = 0L
+
+    private val _savedAnim = MutableStateFlow(prefs.getBoolean("saved_anim", true))
+    val savedAnim: StateFlow<Boolean> = _savedAnim.asStateFlow()
+
+    fun setSavedAnim(on: Boolean) {
+        prefs.edit().putBoolean("saved_anim", on).apply()
+        _savedAnim.value = on
+    }
+
+    /** สำเร็จ: ถ้าเปิดอนิเมชั่นและเป็นการบันทึก (ไม่ใช่ลบ) → ป๊อปอัปติ๊กถูก, ไม่งั้นแถบข้อความล่าง */
+    private fun notifySaved(text: String) {
+        if (_savedAnim.value && !text.startsWith("ลบ")) _saved.value = Saved(++savedSeq, text.trimEnd(' ', '✓'))
+        else _message.value = text
+    }
+
+    fun clearSaved(id: Long) {
+        if (_saved.value?.id == id) _saved.value = null
+    }
+
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
@@ -189,7 +214,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val err = try {
                 val v = repo.edit(block)
-                if (ok != null) _message.value = ok
+                if (ok != null) notifySaved(ok)
                 onOk(v)
                 null
             } catch (e: EngineException) {
