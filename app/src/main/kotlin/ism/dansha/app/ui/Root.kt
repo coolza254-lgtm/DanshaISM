@@ -79,7 +79,7 @@ fun DanshaRoot(vm: MainViewModel) {
     val pending by vm.pendingImport.collectAsState()
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
     // กองหน้าซ้อน: เปิดหน้าใหม่ทับ (หน้าเดิมยังอยู่ข้างใต้) ย้อนกลับ = ปิดหน้าบนสุด
-    val pages = rememberSaveable(saver = listSaver(save = { l -> l.map { it.name } }, restore = { l -> l.map(Page::valueOf).toMutableStateList() })) {
+    val pages = rememberSaveable(saver = listSaver<androidx.compose.runtime.snapshots.SnapshotStateList<Page>, String>(save = { l -> l.map { it.name } }, restore = { l -> l.map(Page::valueOf).toMutableStateList() })) {
         mutableStateListOf<Page>()
     }
     fun open(p: Page) {
