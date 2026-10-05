@@ -91,6 +91,8 @@ fun DanshaRoot(vm: MainViewModel) {
     // เพิ่มรายการ: null = ปิด, ไม่งั้นคือประเภทเริ่มต้น (expense/income/transfer)
     var adding by remember { mutableStateOf<String?>(null) }
     val launch by vm.launch.collectAsState()
+    val confirmExit by vm.confirmExit.collectAsState()
+    var askExit by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val overlay = remember { OverlayHostState() }
     val tabStates = rememberSaveableStateHolder()
@@ -166,6 +168,12 @@ fun DanshaRoot(vm: MainViewModel) {
                 }
             }
 
+            // ปัด/กดย้อนกลับที่หน้าหลัก: แท็บอื่น → กลับภาพรวม, ภาพรวม → ถามก่อนออก
+            // (หน้าซ้อน/แผ่นจดรายการจัดการปุ่มย้อนกลับเองก่อน)
+            androidx.activity.compose.BackHandler(enabled = pages.isEmpty() && adding == null && (tab != Tab.Home || confirmExit)) {
+                if (tab != Tab.Home) tab = Tab.Home else askExit = true
+            }
+
             // หน้าซ้อน (วาดใน OverlayHost ด้านล่าง)
             if (data != null) {
                 pages.forEach { p ->
@@ -195,6 +203,19 @@ fun DanshaRoot(vm: MainViewModel) {
                 )
             }
         }
+    }
+
+    if (askExit) {
+        val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { askExit = false },
+            title = { Text("ออกจากแอพ?") },
+            text = { Text("ข้อมูลที่จดไว้บันทึกแล้วทั้งหมด") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { askExit = false; activity?.finish() }) { Text("ออก", color = LocalPalette.current.negative) }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { askExit = false }) { Text("อยู่ต่อ") } },
+        )
     }
 
     UpdateDialog(update, vm)

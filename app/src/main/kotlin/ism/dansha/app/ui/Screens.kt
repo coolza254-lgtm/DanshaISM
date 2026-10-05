@@ -238,6 +238,8 @@ fun MoreScreen(d: DanshaData, vm: MainViewModel, onOpen: (Page) -> Unit) {
                 ChoiceChips(listOf("system" to "ตามมือถือ", "light" to "สว่าง", "dark" to "มืด"), mode, { vm.setUiMode(it) })
                 Spacer(Modifier.height(8.dp))
                 val anim by vm.savedAnim.collectAsState()
+                val exitAsk by vm.confirmExit.collectAsState()
+                SwitchRow("ถามก่อนออกจากแอพ", exitAsk, { vm.setConfirmExit(it) }, sub = "ปัดย้อนกลับที่หน้าภาพรวมแล้วจะถามก่อนปิด กันเผลอออก")
                 SwitchRow("ป๊อปอัปบันทึกสำเร็จ", anim, { vm.setSavedAnim(it) }, sub = "เด้งติ๊กถูกกลางจอทุกครั้งที่บันทึก (ปิด = แสดงข้อความเล็กด้านล่างแทน)")
             }
         }

@@ -108,6 +108,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _savedAnim.value = on
     }
 
+    /** ถามก่อนออกจากแอพเมื่อปัด/กดย้อนกลับที่หน้าแรก */
+    private val _confirmExit = MutableStateFlow(prefs.getBoolean("confirm_exit", true))
+    val confirmExit: StateFlow<Boolean> = _confirmExit.asStateFlow()
+
+    fun setConfirmExit(on: Boolean) {
+        prefs.edit().putBoolean("confirm_exit", on).apply()
+        _confirmExit.value = on
+    }
+
     /** สำเร็จ: ถ้าเปิดอนิเมชั่นและเป็นการบันทึก (ไม่ใช่ลบ) → ป๊อปอัปติ๊กถูก, ไม่งั้นแถบข้อความล่าง */
     private fun notifySaved(text: String) {
         if (_savedAnim.value && !text.startsWith("ลบ")) _saved.value = Saved(++savedSeq, text.trimEnd(' ', '✓'))
