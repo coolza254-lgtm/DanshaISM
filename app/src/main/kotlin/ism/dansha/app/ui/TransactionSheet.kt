@@ -83,16 +83,16 @@ import kotlinx.coroutines.launch
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, onClose: () -> Unit) {
+fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, initialType: String = "expense", onClose: () -> Unit) {
     val p = LocalPalette.current
     val e = existing
     val hadCopay = (e?.gov_subsidy?.signum() ?: 0) > 0
-    var type by remember { mutableStateOf(e?.type ?: "expense") }
+    var type by remember { mutableStateOf(e?.type ?: initialType) }
     // ใช้สิทธิ 60/40: ตัวเลขที่พิมพ์ = ราคาเต็ม
     var copay by remember { mutableStateOf(hadCopay) }
     var amount by remember { mutableStateOf(amountText(if (hadCopay) e?.full_price else e?.amount)) }
     var date by remember { mutableStateOf(e?.date ?: Dates.todayStr()) }
-    var accountId by remember { mutableStateOf(e?.account_id ?: Forms.defaultAccount(d, "expense")) }
+    var accountId by remember { mutableStateOf(e?.account_id ?: Forms.defaultAccount(d, initialType)) }
     var toAccountId by remember { mutableStateOf(e?.to_account_id.orEmpty()) }
     var categoryId by remember { mutableStateOf(e?.category_id.orEmpty()) }
     var subId by remember { mutableStateOf(e?.subcategory_id.orEmpty()) }

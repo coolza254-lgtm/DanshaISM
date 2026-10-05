@@ -25,6 +25,7 @@ class MainActivity : ComponentActivity() {
         val nightSystem = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
         val darkStart = mode == "dark" || (mode == "system" && nightSystem)
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(if (darkStart) 0xFF1E1C1A.toInt() else 0xFFFBF6EA.toInt()))
+        if (savedInstanceState == null) vm.handleLaunch(intent?.action)
         setContent {
             val mode by vm.uiMode.collectAsState()
             val dark = isDark(mode)
@@ -35,5 +36,10 @@ class MainActivity : ComponentActivity() {
             }
             DanshaTheme(mode) { DanshaRoot(vm) }
         }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        vm.handleLaunch(intent.action)
     }
 }

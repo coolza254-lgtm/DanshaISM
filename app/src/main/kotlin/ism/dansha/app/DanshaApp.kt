@@ -12,5 +12,6 @@ class DanshaApp : Application() {
         super.onCreate()
         repository = Repository(AppDatabase.open(this))
         ism.dansha.app.notify.Notifier.setup(this)
+        Shortcuts.setup(this)
     }
 }

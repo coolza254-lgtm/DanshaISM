@@ -88,7 +88,9 @@ fun DanshaRoot(vm: MainViewModel) {
         if (i >= 0) while (pages.size > i + 1) pages.removeAt(pages.lastIndex) else pages.add(p)
     }
     fun back() { if (pages.isNotEmpty()) pages.removeAt(pages.lastIndex) }
-    var adding by remember { mutableStateOf(false) }
+    // เพิ่มรายการ: null = ปิด, ไม่งั้นคือประเภทเริ่มต้น (expense/income/transfer)
+    var adding by remember { mutableStateOf<String?>(null) }
+    val launch by vm.launch.collectAsState()
     val snackbar = remember { SnackbarHostState() }
     val overlay = remember { OverlayHostState() }
     val tabStates = rememberSaveableStateHolder()
@@ -111,6 +113,21 @@ fun DanshaRoot(vm: MainViewModel) {
         }
     }
 
+    // เปิดจากทางลัด (กดค้างไอคอนแอพ / ปุ่มใน Quick Panel)
+    LaunchedEffect(launch, data != null) {
+        val a = launch ?: return@LaunchedEffect
+        if (data == null) return@LaunchedEffect
+        vm.consumeLaunch()
+        pages.clear()
+        when (a) {
+            Launch.ADD_EXPENSE, Launch.ADD_INCOME, Launch.ADD_TRANSFER ->
+                if (data.isEmpty()) vm.toast("นำเข้าข้อมูลหรือกดเริ่มใหม่ก่อน")
+                else adding = when (a) { Launch.ADD_INCOME -> "income"; Launch.ADD_TRANSFER -> "transfer"; else -> "expense" }
+            Launch.TRANSACTIONS -> tab = Tab.Transactions
+            Launch.PLAN -> tab = Tab.Plan
+        }
+    }
+
     LaunchedEffect(message) {
         message?.let {
             vm.clearMessage()
@@ -124,7 +141,7 @@ fun DanshaRoot(vm: MainViewModel) {
         Box(Modifier.fillMaxSize().background(LocalPalette.current.bg)) {
             Scaffold(
                 containerColor = LocalPalette.current.bg,
-                bottomBar = { BottomBar(tab, { tab = it }, onAdd = { if (hasData) adding = true else vm.toast("นำเข้าข้อมูลหรือกดเริ่มใหม่ก่อน") }) },
+                bottomBar = { BottomBar(tab, { tab = it }, onAdd = { if (hasData) adding = "expense" else vm.toast("นำเข้าข้อมูลหรือกดเริ่มใหม่ก่อน") }) },
             ) { padding ->
                 Box(Modifier.fillMaxSize().padding(padding).notebookPaper(LocalPalette.current)) {
                     if (data == null) {
@@ -163,7 +180,7 @@ fun DanshaRoot(vm: MainViewModel) {
                         }
                     }
                 }
-                if (adding) TransactionEditor(data, null, vm) { adding = false }
+                adding?.let { t -> key(t) { TransactionEditor(data, null, vm, initialType = t) { adding = null } } }
             }
             OverlayHost(overlay)
             SavedPopup(saved) { vm.clearSaved(it) }

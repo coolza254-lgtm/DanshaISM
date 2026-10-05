@@ -118,6 +118,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (_saved.value?.id == id) _saved.value = null
     }
 
+    /** คำสั่งจากทางลัด รอหน้าจอหยิบไปทำ */
+    private val _launch = MutableStateFlow<ism.dansha.app.ui.Launch?>(null)
+    val launch: StateFlow<ism.dansha.app.ui.Launch?> = _launch.asStateFlow()
+
+    fun handleLaunch(action: String?) {
+        ism.dansha.app.ui.Launch.fromAction(action)?.let { _launch.value = it }
+    }
+
+    fun consumeLaunch() {
+        _launch.value = null
+    }
+
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
