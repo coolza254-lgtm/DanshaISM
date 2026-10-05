@@ -86,6 +86,7 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
         uri?.let { vm.pickImport(it) }
     }
     var editingTxn by remember { mutableStateOf<Transaction?>(null) }
+    var sharing by remember { mutableStateOf(false) }
     // คำนวณครั้งเดียวต่อข้อมูลชุดหนึ่ง (ไม่ทำซ้ำทุกครั้งที่หน้าวาดใหม่)
     val recent = remember(d) { d.transactions.sortedWith(compareByDescending<Transaction> { it.date }.thenByDescending { it.created_at }).take(6) }
     val accs = remember(d) { d.accounts.associateBy { it.id } }
@@ -95,7 +96,7 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
             ScreenTitle("断捨ISM", c?.let { "${greeting()} · รอบ ${cycleLabel(it.overview.payCycle)}" }) {
-                if (c != null) IconButton(onClick = { vm.summaryText()?.let { shareText(ctx, it) } }) {
+                if (c != null) IconButton(onClick = { sharing = true }) {
                     Icon(Icons.Outlined.Share, contentDescription = "แชร์สรุปวันนี้", tint = p.ink)
                 }
             }
@@ -222,6 +223,7 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
         }
     }
     editingTxn?.let { t -> TransactionEditor(d, t, vm) { editingTxn = null } }
+    if (sharing && c != null) ShareCardPage(d, c, vm) { sharing = false }
 }
 
 /** คำทักตามช่วงเวลา */
