@@ -70,40 +70,78 @@ object PlanBook {
     fun encodeWorkDays(days: List<WorkDay>): String =
         days.sortedBy { it.date }.joinToString(",") { it.date + if (it.late) "*" else "" }
 
-    data class TravelFares(val go: Double, val back: Double, val grab: Double)
+    /**
+     * ค่ารถที่เผื่อไว้ตอนวางแผน: รถเมล์เที่ยวละ 20 (กรณีแพงสุดของ 8/12/20) — จ่ายจริงน้อยกว่าค่อยจดตามจริง
+     * วันกะดึก (เลิก 23:00) = ขาไปรถเมล์ + ขากลับ Grab (ไม่มีรถเมล์ขากลับ)
+     */
+    data class TravelFares(val bus: Double, val grab: Double, val choices: List<Double>)
 
     fun fares(config: Map<String, String>): TravelFares = TravelFares(
-        go = config["travel_go"]?.toDoubleOrNull() ?: 12.0,
-        back = config["travel_back"]?.toDoubleOrNull() ?: 12.0,
+        bus = config["travel_bus"]?.toDoubleOrNull() ?: 20.0,
         grab = config["travel_grab"]?.toDoubleOrNull() ?: 150.0,
+        choices = config["travel_fares"].orEmpty().split(',').mapNotNull { it.trim().toDoubleOrNull() }.ifEmpty { listOf(8.0, 12.0, 20.0) },
     )
+
+    const val NOTE_GO = "ค่ารถไปทำงาน"
+    const val NOTE_BACK = "ค่ารถกลับบ้าน"
+
+    /** วันหนึ่งในแผน: ที่เผื่อไว้ vs ที่จดจริง */
+    data class TravelDay(
+        val date: String,
+        val late: Boolean,
+        val go: Transaction?,
+        /** ขากลับ: รถเมล์ (วันปกติ) หรือ Grab (วันกะดึก) */
+        val back: Transaction?,
+        val planGo: Double,
+        val planBack: Double,
+    ) {
+        val paid: Double get() = (go?.amount.num()) + (back?.amount.num())
+        val done: Boolean get() = go != null && back != null
+        /** ยังต้องเตรียม = ขาที่ยังไม่จด */
+        val pending: Double get() = (if (go == null) planGo else 0.0) + (if (back == null) planBack else 0.0)
+        /** ประหยัดได้จากขาที่จดแล้ว (เผื่อ − จ่ายจริง) */
+        val saved: Double get() = (go?.let { planGo - it.amount.num() } ?: 0.0) + (back?.let { planBack - it.amount.num() } ?: 0.0)
+    }
 
     data class TravelPlan(
         val days: Int,
         val lateDays: Int,
-        /** วันทำงานที่ยังไม่ถึง (รวมวันนี้) */
+        /** วันที่ยังจดไม่ครบ */
         val daysLeft: Int,
         val lateLeft: Int,
-        /** ประมาณค่าเดินทางทั้งรอบ */
+        /** เผื่อไว้ทั้งรอบ */
         val total: Double,
-        /** ประมาณที่ยังต้องจ่าย (วันนี้เป็นต้นไป) */
+        /** ยังต้องเตรียม (ขาที่ยังไม่จด) */
         val remaining: Double,
-        /** จดค่าเดินทางจริงในรอบนี้แล้ว */
+        /** จ่ายจริงแล้ว (ค่าเดินทางที่จดในรอบนี้) */
         val spent: Double,
+        /** ประหยัดได้จากที่เผื่อ */
+        val saved: Double,
+        val list: List<TravelDay>,
     )
 
-    /** ค่าเดินทาง: วันปกติ = ไป + กลับ (เงินสด), วันกะดึก = ไป (เงินสด) + Grab กลับ */
+    /** ขาไป/ขากลับที่จดไว้ของวันนั้น */
+    fun legs(d: DanshaData, date: String): Pair<Transaction?, Transaction?> {
+        val day = d.transactions.filter { it.date == date && isTravelTxn(it) }
+        val go = day.firstOrNull { it.note == NOTE_GO }
+        val back = day.firstOrNull { it.note == NOTE_BACK || it.claim.isNotEmpty() }
+        return go to back
+    }
+
     fun travel(d: DanshaData, cycle: String, today: String = Dates.todayStr()): TravelPlan {
         val cfg = Engine.config(d)
         val f = fares(cfg)
-        val days = workDays(cfg, cycle)
-        fun cost(w: WorkDay) = if (w.late) f.go + f.grab else f.go + f.back
-        val left = days.filter { it.date >= today }
+        val list = workDays(cfg, cycle).map { w ->
+            val (go, back) = legs(d, w.date)
+            TravelDay(w.date, w.late, go, back, f.bus, if (w.late) f.grab else f.bus)
+        }
         val (rs, re) = Dates.payCycleRange(cycle, Engine.startDay(cfg))
         val spent = d.transactions.filter { isTravelTxn(it) && it.date >= rs.toString() && it.date <= re.toString() }.sumOf { it.amount.num() }
+        val open = list.filter { !it.done }
         return TravelPlan(
-            days = days.size, lateDays = days.count { it.late }, daysLeft = left.size, lateLeft = left.count { it.late },
-            total = round2(days.sumOf(::cost)), remaining = round2(left.sumOf(::cost)), spent = round2(spent),
+            days = list.size, lateDays = list.count { it.late }, daysLeft = open.size, lateLeft = open.count { it.late },
+            total = round2(list.sumOf { it.planGo + it.planBack }), remaining = round2(list.sumOf { it.pending }),
+            spent = round2(spent), saved = round2(list.sumOf { it.saved }), list = list,
         )
     }
 

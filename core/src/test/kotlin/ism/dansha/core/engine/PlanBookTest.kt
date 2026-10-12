@@ -44,13 +44,26 @@ class PlanBookTest {
     @Test
     fun travelFromWorkDays() {
         val r = Store.run(base) {
-            setConfig(mapOf("travel_go" to "12", "travel_back" to "8", "travel_grab" to "150"))
+            setConfig(mapOf("travel_bus" to "20", "travel_grab" to "150"))
             setWorkDays(cycle, listOf(PlanBook.WorkDay("2099-10-16", false), PlanBook.WorkDay("2099-10-17", true)))
         }
         val row = r.data.bills.single { it.template_id == PlanBook.AUTO_TRAVEL }
-        assertEquals(12.0 + 8.0 + 12.0 + 150.0, row.est_amount.num())
+        assertEquals(20.0 + 20.0 + 20.0 + 150.0, row.est_amount.num()) // กะดึก: ไปรถเมล์ + กลับ Grab
         assertEquals("B", row.group)
         assertEquals(PlanBook.TRAVEL, PlanBook.sectionOf(row))
+
+        // จดจริง: ไป 12 กลับ 8 → ยอดที่ต้องเตรียมลด 40, ประหยัด 20
+        val paid = Store.run(r.data) {
+            setTravelLeg("2099-10-16", "go", 12.0); setTravelLeg("2099-10-16", "back", 8.0)
+            setTravelLeg("2099-10-16", "go", 8.0) // กดใหม่ = แก้ยอด
+            syncPlan(cycle)
+        }
+        val tp = PlanBook.travel(paid.data, cycle)
+        assertEquals(170.0, tp.remaining)
+        assertEquals(16.0, tp.spent)
+        assertEquals(24.0, tp.saved)
+        assertEquals(170.0, paid.data.bills.single { it.template_id == PlanBook.AUTO_TRAVEL }.est_amount.num())
+        assertTrue(tp.list.first().done)
     }
 
     @Test

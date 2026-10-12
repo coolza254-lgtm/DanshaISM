@@ -51,57 +51,87 @@ import ism.dansha.core.engine.PlanBook
 @Composable
 fun TravelSummary(tp: PlanBook.TravelPlan, openClaims: Int, openClaimTotal: Double, onWorkDays: () -> Unit, onClaims: () -> Unit) {
     val p = LocalPalette.current
-    Column(Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(10.dp)).background(p.surface).padding(12.dp)) {
+    Column(Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(10.dp)).background(p.surface).clickable(onClick = onWorkDays).padding(12.dp)) {
         if (tp.days == 0) {
-            Text("ยังไม่ได้ติ๊กวันทำงานของรอบนี้", fontSize = 14.sp, color = p.ink)
-            Text("ติ๊กวันไปทำงาน + วันกะ 14:00–23:00 (กลับ Grab) แล้วแอพคิดค่ารถทั้งรอบให้", fontSize = 13.sp, color = p.muted)
+            Text("ยังไม่ได้วางแผนวันไปทำงาน", fontSize = 14.sp, color = p.ink, fontWeight = FontWeight.Medium)
+            Text("แตะเพื่อเลือกวันไปทำงานในปฏิทิน แล้วจดค่ารถจริงทีละวัน", fontSize = 13.sp, color = p.muted)
         } else {
-            Text("ทำงาน ${tp.days} วัน (กะดึก ${tp.lateDays} วัน) · ประมาณทั้งรอบ ฿${formatMoney(tp.total)}", fontSize = 14.sp, color = p.ink)
-            Text("จดค่ารถจริงแล้ว ฿${formatMoney(tp.spent)} · ยังเหลือ ${tp.daysLeft} วัน ≈ ฿${formatMoney(tp.remaining)}", fontSize = 13.sp, color = p.muted)
+            Row {
+                TravelStat("เผื่อไว้", tp.total, p.ink, Modifier.weight(1f))
+                TravelStat("จ่ายจริง", tp.spent, p.negative, Modifier.weight(1f))
+                TravelStat("ยังต้องเตรียม", tp.remaining, p.primary, Modifier.weight(1f))
+            }
+            Text(
+                "ไปทำงาน ${tp.days} วัน (กะดึก ${tp.lateDays}) · จดครบแล้ว ${tp.days - tp.daysLeft} วัน" + if (tp.saved > 0) " · ประหยัดได้ ฿${formatMoney(tp.saved)}" else "",
+                fontSize = 13.sp, color = p.muted, modifier = Modifier.padding(top = 6.dp),
+            )
         }
         Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onWorkDays) { Text("📅 วันทำงาน") }
+            Button(onClick = onWorkDays) { Text(if (tp.days == 0) "📅 วางแผนวันทำงาน" else "🚌 เปิดหน้าค่าเดินทาง") }
             OutlinedButton(onClick = onClaims) { Text(if (openClaims > 0) "🧾 เบิก Grab ($openClaims)" else "🧾 Staff Claim") }
         }
         if (openClaims > 0) Text("Grab รอส่งเบิก $openClaims เที่ยว ฿${formatMoney(openClaimTotal)} — ส่งภายในวันที่ 15 ได้เงินวันที่ 30", fontSize = 13.sp, color = p.warning, modifier = Modifier.padding(top = 6.dp))
     }
 }
 
-// ---------- วันทำงาน ----------
+@Composable
+private fun TravelStat(label: String, value: Double, color: Color, modifier: Modifier) {
+    Column(modifier) {
+        Text(label, fontSize = 12.sp, color = LocalPalette.current.muted)
+        Text("฿" + formatMoney(value), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = color)
+    }
+}
+
+// ---------- หน้าค่าเดินทาง: วางแผน + จดจริง ----------
 
 private val WEEK_TH = listOf("จ", "อ", "พ", "พฤ", "ศ", "ส", "อา")
+private val DAY_TH = listOf("จันทร์", "อังคาร", "พุธ", "พฤหัสฯ", "ศุกร์", "เสาร์", "อาทิตย์")
 
-/** ปฏิทินรอบเงินเดือน: แตะวัน = ไปทำงาน, แตะอีก = กะดึก (Grab กลับ), แตะอีก = ไม่ไป */
+/**
+ * ปฏิทินรอบเงินเดือน 2 โหมด
+ *  📅 วางแผน: แตะวัน = ไปทำงาน 🚌 → กะดึก 🌙 (กลับ Grab) → ไม่ไป
+ *  ✅ จดค่ารถ: แตะวันทำงาน → กดราคาที่จ่ายจริง แอพติ๊กว่าจ่ายแล้ว ยอดที่ต้องเตรียมลดลง
+ */
 @Composable
 fun WorkDaysPage(d: DanshaData, cycle: String, vm: MainViewModel, onClose: () -> Unit) {
     val p = LocalPalette.current
     val cfg = remember(d) { Engine.config(d) }
     val (rs, re) = remember(cycle) { Dates.payCycleRange(cycle, Engine.startDay(cfg)) }
-    val state = remember { mutableStateMapOf<String, Boolean>().apply { PlanBook.workDays(cfg, cycle).forEach { put(it.date, it.late) } } }
-    val fares = PlanBook.fares(cfg)
-    var go by remember { mutableStateOf(amountText(fares.go)) }
-    var back by remember { mutableStateOf(amountText(fares.back)) }
+    val tp = remember(d, cycle) { PlanBook.travel(d, cycle) }
+    val byDate = remember(tp) { tp.list.associateBy { it.date } }
+    val fares = remember(cfg) { PlanBook.fares(cfg) }
+    var planMode by remember { mutableStateOf(tp.days == 0) }
+    var openDay by remember { mutableStateOf<String?>(null) }
+    var bus by remember { mutableStateOf(amountText(fares.bus)) }
     var grab by remember { mutableStateOf(amountText(fares.grab)) }
-    var error by remember { mutableStateOf<String?>(null) }
 
-    val g = Forms.parseAmount(go) ?: 0.0
-    val b = Forms.parseAmount(back) ?: 0.0
-    val gr = Forms.parseAmount(grab) ?: 0.0
-    val normal = state.count { !it.value }
-    val late = state.count { it.value }
-
-    fun save() {
-        val days = state.map { (date, l) -> PlanBook.WorkDay(date, l) }
-        vm.edit<Unit>(ok = "บันทึกวันทำงานแล้ว", onError = { error = it }, onOk = { onClose() }) {
-            setConfig(mapOf("travel_go" to go.ifEmpty { "0" }, "travel_back" to back.ifEmpty { "0" }, "travel_grab" to grab.ifEmpty { "0" }))
-            setWorkDays(cycle, days)
-        }
+    fun setDay(date: String, state: Boolean?) {
+        val days = tp.list.map { PlanBook.WorkDay(it.date, it.late) }.filter { it.date != date } +
+            listOfNotNull(state?.let { PlanBook.WorkDay(date, it) })
+        vm.edit<Unit> { setWorkDays(cycle, days) }
     }
 
-    FormPage("วันทำงาน รอบ ${cycleLabel(cycle)}", onClose, ::save) {
-        error?.let { Note(it, p.negative) }
-        Note("แตะ 1 ครั้ง = ไปทำงาน 🚌 · แตะอีก = กะ 14:00–23:00 กลับ Grab 🌙 · แตะอีก = ไม่ไป", p.ink)
-        // หัววัน
+    FormPage("ค่าเดินทาง · ${cycleLabel(cycle)}", onClose, onSave = null) {
+        // สรุป
+        Column(Modifier.fillMaxWidth().paperCard(p, p.card, radius = 14.dp).padding(14.dp)) {
+            Row {
+                TravelStat("เผื่อไว้ทั้งรอบ", tp.total, p.ink, Modifier.weight(1f))
+                TravelStat("จ่ายจริงแล้ว", tp.spent, p.negative, Modifier.weight(1f))
+                TravelStat("ยังต้องเตรียม", tp.remaining, p.primary, Modifier.weight(1f))
+            }
+            if (tp.saved > 0) Text("🎉 ประหยัดจากที่เผื่อไว้ ฿${formatMoney(tp.saved)}", fontSize = 14.sp, color = p.positive, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
+            Text("ไปทำงาน ${tp.days} วัน (กะดึก ${tp.lateDays}) · จดครบแล้ว ${tp.days - tp.daysLeft} วัน", fontSize = 13.sp, color = p.muted, modifier = Modifier.padding(top = 4.dp))
+        }
+
+        // โหมด
+        TypeTabs(planMode) { planMode = it }
+        Note(
+            if (planMode) "แตะวัน: 1 ครั้ง = ไปทำงาน 🚌 · 2 ครั้ง = กะ 14:00–23:00 กลับ Grab 🌙 · 3 ครั้ง = ไม่ไป"
+            else "แตะวันที่ไปทำงาน แล้วกดราคาที่จ่ายจริง (ไม่ตรงก็กดใหม่ได้)",
+            p.ink,
+        )
+
+        // ปฏิทิน
         Row(Modifier.fillMaxWidth()) { WEEK_TH.forEach { Text(it, Modifier.weight(1f), textAlign = TextAlign.Center, fontSize = 13.sp, color = p.muted) } }
         val start = rs.minusDays((rs.dayOfWeek.value - 1).toLong())
         var day = start
@@ -112,21 +142,37 @@ fun WorkDaysPage(d: DanshaData, cycle: String, vm: MainViewModel, onClose: () ->
                     week.forEach { dt ->
                         val inCycle = !dt.isBefore(rs) && !dt.isAfter(re)
                         val key = dt.toString()
-                        val st = state[key]
-                        val bg = when { !inCycle -> Color.Transparent; st == null -> p.surface; st -> p.stickyBlue; else -> p.positiveSoft }
+                        val td = byDate[key]
+                        val partial = td != null && !td.done && (td.go != null || td.back != null)
+                        val bg = when {
+                            !inCycle -> Color.Transparent
+                            td == null -> p.surface
+                            td.done -> p.positiveSoft
+                            partial -> p.warningSoft
+                            td.late -> p.stickyBlue
+                            else -> p.primarySoft
+                        }
                         Box(
-                            Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(8.dp)).background(bg)
+                            Modifier.weight(1f).aspectRatio(0.82f).clip(RoundedCornerShape(8.dp)).background(bg)
                                 .then(if (key == Dates.todayStr()) Modifier.border(2.dp, p.primary, RoundedCornerShape(8.dp)) else Modifier)
                                 .then(
                                     if (inCycle) Modifier.clickable {
-                                        when (st) { null -> state[key] = false; false -> state[key] = true; true -> state.remove(key) }
+                                        if (planMode) setDay(key, when (td?.late) { null -> false; false -> true; true -> null })
+                                        else if (td != null) openDay = key
+                                        else setDay(key, false).also { openDay = key }
                                     } else Modifier,
                                 ),
                             contentAlignment = Alignment.Center,
                         ) {
                             if (inCycle) Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(dt.dayOfMonth.toString(), fontSize = 14.sp, color = p.ink, fontWeight = if (st != null) FontWeight.Bold else FontWeight.Normal)
-                                if (st != null) Text(if (st) "🌙" else "🚌", fontSize = 11.sp)
+                                Text(dt.dayOfMonth.toString(), fontSize = 14.sp, color = p.ink, fontWeight = if (td != null) FontWeight.Bold else FontWeight.Normal)
+                                if (td != null) {
+                                    Text(if (td.done) "✓" else if (td.late) "🌙" else "🚌", fontSize = 11.sp, color = p.positive, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        if (td.done || partial) amountText(td.paid) else amountText(td.planGo + td.planBack),
+                                        fontSize = 10.sp, color = if (td.done) p.positive else p.muted,
+                                    )
+                                }
                             }
                         }
                     }
@@ -134,23 +180,150 @@ fun WorkDaysPage(d: DanshaData, cycle: String, vm: MainViewModel, onClose: () ->
                 day = day.plusWeeks(1)
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // คำอธิบายสี
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Legend(p.primarySoft, "🚌 ไปทำงาน")
+            Legend(p.stickyBlue, "🌙 กะดึก")
+            Legend(p.warningSoft, "จดไม่ครบ")
+            Legend(p.positiveSoft, "✓ จ่ายแล้ว")
+        }
+        if (planMode) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = {
+                val days = tp.list.map { PlanBook.WorkDay(it.date, it.late) }.toMutableList()
                 var x = rs
-                while (!x.isAfter(re)) { if (x.dayOfWeek.value <= 5 && state[x.toString()] == null) state[x.toString()] = false; x = x.plusDays(1) }
+                while (!x.isAfter(re)) { if (x.dayOfWeek.value <= 5 && days.none { it.date == x.toString() }) days += PlanBook.WorkDay(x.toString(), false); x = x.plusDays(1) }
+                vm.edit<Unit> { setWorkDays(cycle, days) }
             }) { Text("ติ๊ก จ–ศ ทั้งหมด") }
-            OutlinedButton(onClick = { state.clear() }) { Text("ล้าง") }
+            OutlinedButton(onClick = { vm.edit<Unit> { setWorkDays(cycle, emptyList()) } }) { Text("ล้างแผน") }
         }
-        Text("ทำงาน ${normal + late} วัน (กะดึก $late) · ประมาณ ฿${formatMoney(normal * (g + b) + late * (g + gr))}", fontWeight = FontWeight.SemiBold, color = p.ink)
-        Text("ค่าเดินทางโดยประมาณ (ใช้วางแผน)", fontWeight = FontWeight.Medium)
-        Row {
-            AmountField("ขาไป", go, { go = it }, Modifier.weight(1f))
-            Spacer(Modifier.width(8.dp))
-            AmountField("ขากลับ", back, { back = it }, Modifier.weight(1f))
-            Spacer(Modifier.width(8.dp))
-            AmountField("Grab กลับ", grab, { grab = it }, Modifier.weight(1f))
+
+        // วันที่ผ่านไปแล้วแต่ยังจดไม่ครบ
+        val missing = tp.list.filter { !it.done && it.date < Dates.todayStr() }
+        if (missing.isNotEmpty()) {
+            Text("ยังไม่ได้จด (${missing.size} วัน)", fontWeight = FontWeight.SemiBold, color = p.warning)
+            missing.forEach { td ->
+                Row(Modifier.fillMaxWidth().clickable { openDay = td.date }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(dayTitle(td.date) + if (td.late) " 🌙" else " 🚌", Modifier.weight(1f), color = p.ink)
+                    Text("จด ›", color = p.primary, fontWeight = FontWeight.SemiBold)
+                }
+            }
         }
-        Note("วันจริงกดจดค่ารถได้จากการ์ด \"ไปทำงานวันนี้\" ในหน้าภาพรวม (8 / 12 / 20 บาท หรือ Grab)")
+
+        // ราคาที่เผื่อ
+        Text("ราคาที่เผื่อไว้ตอนวางแผน", fontWeight = FontWeight.SemiBold, color = p.ink, modifier = Modifier.padding(top = 8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AmountField("รถเมล์ (เที่ยวละ)", bus, { bus = it }, Modifier.weight(1f))
+            Spacer(Modifier.width(8.dp))
+            AmountField("Grab กลับ (ประมาณ)", grab, { grab = it }, Modifier.weight(1f))
+        }
+        Note("รถเมล์ราคา 8 / 12 / 20 แล้วแต่คันไหนมาก่อน เลยเผื่อแพงสุดไว้ก่อน (20) จ่ายจริงเท่าไหร่ค่อยกดตามจริง · วันกะดึกไม่มีรถเมล์ขากลับ (นั่ง Grab)")
+        if (bus != amountText(fares.bus) || grab != amountText(fares.grab)) {
+            Button(onClick = {
+                vm.edit<Unit>(ok = "บันทึกราคาเผื่อแล้ว") { setConfig(mapOf("travel_bus" to bus.ifEmpty { "20" }, "travel_grab" to grab.ifEmpty { "0" })); syncPlan(cycle) }
+            }, modifier = Modifier.fillMaxWidth()) { Text("บันทึกราคาเผื่อ") }
+        }
+    }
+
+    openDay?.let { date ->
+        val td = byDate[date]
+        if (td != null) TravelDayDialog(td, fares, vm, cycle, onType = { setDay(date, it) }) { openDay = null }
+    }
+}
+
+@Composable
+private fun TypeTabs(planMode: Boolean, onChange: (Boolean) -> Unit) {
+    val p = LocalPalette.current
+    val shape = RoundedCornerShape(50)
+    Row(Modifier.fillMaxWidth().clip(shape).background(p.surface).border(1.5.dp, p.ink.copy(alpha = 0.6f), shape).padding(3.dp)) {
+        listOf(true to "📅 วางแผนวันไปทำงาน", false to "✅ จดค่ารถจริง").forEach { (v, label) ->
+            Box(
+                Modifier.weight(1f).clip(shape).background(if (v == planMode) p.primary else Color.Transparent).clickable { onChange(v) }.padding(vertical = 9.dp),
+                contentAlignment = Alignment.Center,
+            ) { Text(label, color = if (v == planMode) p.onPrimary else p.ink, fontWeight = FontWeight.SemiBold, fontSize = 14.sp) }
+        }
+    }
+}
+
+@Composable
+private fun Legend(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(color))
+        Spacer(Modifier.width(4.dp))
+        Text(label, fontSize = 11.sp, color = LocalPalette.current.muted)
+    }
+}
+
+private fun dayTitle(date: String): String {
+    val d = java.time.LocalDate.parse(date)
+    return "${DAY_TH[d.dayOfWeek.value - 1]} ${shortThaiDate(date)}"
+}
+
+/** จดค่ารถของวันหนึ่ง: ขาไป + ขากลับ (รถเมล์ หรือ Grab วันกะดึก) */
+@Composable
+private fun TravelDayDialog(td: PlanBook.TravelDay, fares: PlanBook.TravelFares, vm: MainViewModel, cycle: String, onType: (Boolean?) -> Unit, onClose: () -> Unit) {
+    val p = LocalPalette.current
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text(dayTitle(td.date), fontFamily = Hand, fontWeight = FontWeight.Bold, color = p.primary) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                ChoiceChips(listOf(false to "🚌 ไปทำงาน", true to "🌙 กะดึก (กลับ Grab)"), td.late, { onType(it) })
+                LegPicker(td, fares, vm, cycle)
+                Text(
+                    "เผื่อไว้ ฿${formatMoney(td.planGo + td.planBack)} · จ่ายจริง ฿${formatMoney(td.paid)}" +
+                        if (td.saved > 0) " · ประหยัด ฿${formatMoney(td.saved)}" else "",
+                    fontSize = 13.sp, color = p.muted,
+                )
+                Text("ไม่ได้ไปทำงานวันนี้ ›", Modifier.clickable { onType(null); onClose() }, color = p.negative, fontSize = 14.sp)
+            }
+        },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = onClose) { Text("เสร็จ") } },
+    )
+}
+
+/** ปุ่มจดขาไป / ขากลับ — ใช้ทั้งในหน้าค่าเดินทางและการ์ดหน้าภาพรวม */
+@Composable
+private fun LegPicker(td: PlanBook.TravelDay, fares: PlanBook.TravelFares, vm: MainViewModel, cycle: String) {
+    val p = LocalPalette.current
+    fun set(leg: String, amount: Double?) {
+        vm.edit<Any?>(ok = amount?.let { "จดค่ารถ ฿${formatMoney(it)}" }) { setTravelLeg(td.date, leg, amount).also { syncPlan(cycle) } }
+    }
+    LegRow("ขาไป (รถเมล์)", td.go?.amount?.toDouble(), fares.choices, onPick = { set("go", it) }, onClear = { set("go", null) })
+    if (td.late) {
+        var grabText by remember(td.back?.id) { mutableStateOf(amountText(td.back?.amount)) }
+        Text("ขากลับ (Grab · เบิก Staff Claim ได้)", fontSize = 14.sp, color = p.ink, fontWeight = FontWeight.Medium)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AmountField("ค่า Grab", grabText, { grabText = it }, Modifier.weight(1f))
+            Spacer(Modifier.width(8.dp))
+            Button(onClick = { Forms.parseAmount(grabText)?.let { set("grab", it) } }) { Text(if (td.back != null) "แก้" else "จด") }
+        }
+        td.back?.let { b -> Text("✓ จดแล้ว ฿${formatMoney(b.amount)} · ${claimLabel(b.claim)}", fontSize = 13.sp, color = p.positive) }
+    } else {
+        LegRow("ขากลับ (รถเมล์)", td.back?.amount?.toDouble(), fares.choices, onPick = { set("back", it) }, onClear = { set("back", null) })
+    }
+}
+
+@Composable
+private fun LegRow(label: String, logged: Double?, choices: List<Double>, onPick: (Double) -> Unit, onClear: () -> Unit) {
+    val p = LocalPalette.current
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(label, Modifier.weight(1f), fontSize = 14.sp, color = p.ink, fontWeight = FontWeight.Medium)
+            if (logged != null) Text("ลบ", Modifier.clickable(onClick = onClear).padding(4.dp), fontSize = 13.sp, color = p.negative)
+        }
+        Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            choices.forEach { f ->
+                val sel = logged == f
+                Text(
+                    (if (sel) "✓ " else "") + "฿" + amountText(f),
+                    Modifier.clip(RoundedCornerShape(50)).background(if (sel) p.positive else p.card)
+                        .border(1.5.dp, if (sel) p.positive else p.ink.copy(alpha = 0.5f), RoundedCornerShape(50))
+                        .clickable { onPick(f) }.padding(horizontal = 14.dp, vertical = 7.dp),
+                    color = if (sel) Color.White else p.ink, fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+        if (logged != null && logged !in choices) Text("✓ จดแล้ว ฿${formatMoney(logged)}", fontSize = 13.sp, color = p.positive)
     }
 }
 
@@ -162,53 +335,20 @@ fun TravelTodayCard(d: DanshaData, vm: MainViewModel) {
     val today = Dates.todayStr()
     val cfg = remember(d) { Engine.config(d) }
     val cycle = remember(d) { Dates.payCycleOf(Dates.today(), Engine.startDay(cfg)) }
-    val work = remember(d) { PlanBook.workDays(cfg, cycle).firstOrNull { it.date == today } } ?: return
-    val todays = remember(d) { d.transactions.filter { it.date == today && PlanBook.isTravelTxn(it) } }
-    val wentTo = todays.firstOrNull { it.note == "ค่ารถไปทำงาน" }
-    val cameBack = todays.firstOrNull { it.note == "ค่ารถกลับบ้าน" || it.claim.isNotEmpty() }
-    val fares = remember(cfg) { cfg["travel_fares"].orEmpty().split(',').mapNotNull { it.trim().toDoubleOrNull() }.ifEmpty { listOf(8.0, 12.0, 20.0) } }
-    var grab by remember { mutableStateOf(false) }
-
-    Card(color = p.stickyBlue) {
+    val td = remember(d) { PlanBook.travel(d, cycle).list.firstOrNull { it.date == today } } ?: return
+    val fares = remember(cfg) { PlanBook.fares(cfg) }
+    Card(color = if (td.done) p.positiveSoft else p.stickyBlue) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(if (work.late) "🌙" else "🚌", fontSize = 20.sp)
+            Text(if (td.done) "✅" else if (td.late) "🌙" else "🚌", fontSize = 20.sp)
             Spacer(Modifier.width(8.dp))
-            Text(if (work.late) "ไปทำงานวันนี้ · กะ 14:00–23:00" else "ไปทำงานวันนี้", Modifier.weight(1f), fontFamily = Hand, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = p.primary)
+            Text(
+                if (td.done) "ค่ารถวันนี้จดครบแล้ว ฿${formatMoney(td.paid)}" else if (td.late) "ไปทำงานวันนี้ · กะ 14:00–23:00" else "ไปทำงานวันนี้",
+                Modifier.weight(1f), fontFamily = Hand, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = p.primary,
+            )
         }
-        FareRow("ขาไป", wentTo?.amount?.toDouble(), fares, null) { amt -> vm.edit<Any>(ok = "จดค่ารถไป ฿${formatMoney(amt)}") { logTravel(today, "go", amt) } }
-        FareRow("ขากลับ", cameBack?.amount?.toDouble(), fares, if (work.late) "Grab (เบิกได้)" else "Grab") { amt ->
-            if (amt < 0) grab = true else vm.edit<Any>(ok = "จดค่ารถกลับ ฿${formatMoney(amt)}") { logTravel(today, "back", amt) }
-        }
-    }
-    if (grab) GrabPage(d, vm) { grab = false }
-}
-
-/** แถวปุ่มค่ารถ: ยังไม่จด = ปุ่ม 8/12/20 (+ Grab), จดแล้ว = ✓ ยอด */
-@Composable
-private fun FareRow(label: String, logged: Double?, fares: List<Double>, grabLabel: String?, onPick: (Double) -> Unit) {
-    val p = LocalPalette.current
-    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.width(56.dp), color = p.ink, fontWeight = FontWeight.Medium)
-        if (logged != null) {
-            Text("✓ จดแล้ว ฿${formatMoney(logged)}", color = p.positive, fontWeight = FontWeight.SemiBold)
-        } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                fares.forEach { f ->
-                    Text(
-                        "฿" + amountText(f),
-                        Modifier.clip(RoundedCornerShape(50)).background(p.card).border(1.5.dp, p.ink.copy(alpha = 0.6f), RoundedCornerShape(50))
-                            .clickable { onPick(f) }.padding(horizontal = 12.dp, vertical = 6.dp),
-                        color = p.ink, fontWeight = FontWeight.SemiBold,
-                    )
-                }
-                grabLabel?.let {
-                    Text(
-                        it,
-                        Modifier.clip(RoundedCornerShape(50)).background(p.primary).clickable { onPick(-1.0) }.padding(horizontal = 12.dp, vertical = 6.dp),
-                        color = p.onPrimary, fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
+        if (!td.done) {
+            Spacer(Modifier.height(6.dp))
+            LegPicker(td, fares, vm, cycle)
         }
     }
 }

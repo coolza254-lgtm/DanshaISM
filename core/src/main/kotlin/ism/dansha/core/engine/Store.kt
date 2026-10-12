@@ -648,9 +648,31 @@ class Store private constructor(d: DanshaData) {
             Transaction(
                 id = "", date = date, type = "expense", account_id = acc, amount = amount.toDec(),
                 currency = accounts.firstOrNull { it.id == acc }?.currency ?: "THB",
-                category_id = main, subcategory_id = sub, note = if (leg == "go") "ค่ารถไปทำงาน" else "ค่ารถกลับบ้าน", source = "travel",
+                category_id = main, subcategory_id = sub, note = if (leg == "go") PlanBook.NOTE_GO else PlanBook.NOTE_BACK, source = "travel",
             )
         )
+    }
+
+    /**
+     * ตั้งค่ารถของวันนั้น: leg = go | back | grab, amount = null → ลบที่จดไว้
+     * จดซ้ำ = แก้ยอดเดิม (กดราคาใหม่ได้เลย) — Grab ที่ส่งเบิกไปแล้วแก้ไม่ได้
+     */
+    fun setTravelLeg(date: String, leg: String, amount: Double?): Transaction? {
+        val (go, back) = PlanBook.legs(data(), date)
+        val old = if (leg == "go") go else back
+        if (old != null && (old.claim.startsWith("sub:") || old.claim.startsWith("paid:"))) fail("Grab เที่ยวนี้ส่งเบิกไปแล้ว แก้ไม่ได้")
+        if (amount == null) {
+            if (old != null) deleteTransaction(old.id)
+            return null
+        }
+        if (!(amount > 0)) fail("ยอดต้องมากกว่า 0")
+        // ขากลับเปลี่ยนชนิด (รถเมล์ ↔ Grab) = ลบของเดิมแล้วจดใหม่
+        if (old != null && ((leg == "grab") != old.claim.isNotEmpty())) {
+            deleteTransaction(old.id)
+        } else if (old != null) {
+            return updateTransaction(old.copy(amount = amount.toDec()))
+        }
+        return if (leg == "grab") logGrab(date, amount) else logTravel(date, if (leg == "go") "go" else "back", amount)
     }
 
     /** จด Grab กลับบ้าน (เบิก Staff Claim ได้) */
