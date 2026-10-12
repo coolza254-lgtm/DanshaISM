@@ -201,14 +201,15 @@ fun <T> Picker(label: String, options: List<Pair<T, String>>, selected: T, onSel
     }
 }
 
-/** ตัวเลือกแบบปุ่มเรียงแถว (เลื่อนแนวนอนได้) */
+/** ตัวเลือกแบบปุ่ม: เต็มบรรทัดแล้วขึ้นบรรทัดใหม่ (เห็นครบทุกตัว ไม่ล้นจอ) */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun <T> ChoiceChips(options: List<Pair<T, String>>, selected: T?, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
-    Row(modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    androidx.compose.foundation.layout.FlowRow(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
         options.forEach { (v, text) ->
             val p = LocalPalette.current
             FilterChip(
-                selected = v == selected, onClick = { onSelect(v) }, label = { Text(text) },
+                selected = v == selected, onClick = { onSelect(v) }, label = { Text(text, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 shape = RoundedCornerShape(50),
                 colors = FilterChipDefaults.filterChipColors(
                     containerColor = p.card, labelColor = p.ink,
@@ -273,6 +274,24 @@ fun OverlayPage(title: String, onDismiss: () -> Unit, content: @Composable () ->
             }
         }
     }
+}
+
+/** แถวปุ่ม/ชิปที่ขึ้นบรรทัดใหม่เองเมื่อเต็มจอ (ไม่ล้น ไม่ต้องเลื่อนข้าง) */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+fun WrapRow(modifier: Modifier = Modifier, gap: androidx.compose.ui.unit.Dp = 8.dp, content: @Composable () -> Unit) {
+    androidx.compose.foundation.layout.FlowRow(
+        modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(gap),
+    ) { content() }
+}
+
+/** ตัวเลขใหญ่ที่ย่อขนาดเองให้พอดีบรรทัดเดียว (ยอดเงินยาวๆ ไม่ล้นจอ) */
+@Composable
+fun FitText(text: String, style: androidx.compose.ui.text.TextStyle, modifier: Modifier = Modifier, minSize: androidx.compose.ui.unit.TextUnit = 16.sp) {
+    androidx.compose.foundation.text.BasicText(
+        text, modifier, style = style, maxLines = 1, softWrap = false,
+        autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = minSize, maxFontSize = style.fontSize),
+    )
 }
 
 /** ปฏิทินเลือกวัน (yyyy-MM-dd) แบบป๊อปอัป */

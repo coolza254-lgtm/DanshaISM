@@ -1,5 +1,6 @@
 package ism.dansha.app.ui
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -119,7 +120,7 @@ fun PlanScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
         item { ScreenTitle("แผนบิล") }
         item {
-            Row(Modifier.padding(start = 28.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(start = 10.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { cycle = Outlook.shiftCycle(cycle, -1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "รอบก่อน") }
                 val (rs, re) = Dates.payCycleRange(cycle, startDay)
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -136,7 +137,7 @@ fun PlanScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
                 val totalExp = summary.aPending + summary.aPaid + summary.bPending + summary.bPaid
                 if (cycle == current) {
                     Text("คาดว่าสิ้นรอบเหลือ", color = p.muted, fontSize = 14.sp)
-                    Text(signedBaht(summary.projected), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = if (summary.projected < 0) p.negative else p.primary)
+                    FitText(signedBaht(summary.projected), androidx.compose.ui.text.TextStyle(fontSize = 30.sp, fontWeight = FontWeight.Bold, fontFamily = Sarabun, color = if (summary.projected < 0) p.negative else p.primary))
                     Spacer(Modifier.height(6.dp))
                     PlanLine("เงินที่มีตอนนี้", money(summary.cashNow))
                     PlanLine("+ รายรับที่ยังไม่เข้า", money(summary.incomePending), color = p.positive)
@@ -204,7 +205,7 @@ fun PlanScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
         }
 
         item {
-            Row(Modifier.padding(start = 36.dp, end = 16.dp, top = 12.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            WrapRow(Modifier.padding(start = 22.dp, end = 12.dp, top = 12.dp)) {
                 OutlinedButton(onClick = {
                     vm.edit(onOk = { list: List<Bill> -> vm.toast(if (list.isEmpty()) "ไม่มีแม่แบบใหม่ให้สร้าง" else "สร้างจากแม่แบบ ${list.size} รายการ") }) {
                         generateCycle(cycle).also { syncPlan(cycle) }
@@ -262,7 +263,7 @@ private fun PlanSection(
     val p = LocalPalette.current
     val total = rows.sumOf { (if (it.status == "paid") it.actual_amount else it.est_amount)?.toDouble() ?: 0.0 }
     val done = rows.filter { it.status == "paid" }.sumOf { it.actual_amount?.toDouble() ?: 0.0 }
-    Card {
+    Card(Modifier.animateContentSize()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(emoji, fontSize = 20.sp)
             Spacer(Modifier.width(8.dp))
@@ -344,7 +345,6 @@ private fun BillPage(d: DanshaData, b: Bill, vm: MainViewModel, onClose: () -> U
         if (b.note.isNotEmpty()) Note(b.note)
         if (paid) {
             Text("จ่ายแล้ว ${formatMoney(b.actual_amount)} วันที่ ${thaiDate(b.paid_date)}", fontWeight = FontWeight.SemiBold, color = DanshaColors.Positive)
-            Note("แก้ยอดจริงได้ที่ปุ่ม \"แก้ไข\" (รายการที่ผูกไว้จะแก้ตาม)")
             OutlinedButton(onClick = {
                 vm.edit<Bill>(ok = "ยกเลิกการจ่ายแล้ว", onError = { error = it }, onOk = { onClose() }) { unpayBill(b.id) }
             }, modifier = Modifier.fillMaxWidth()) { Text("ยกเลิกการจ่าย (ลบรายการที่สร้างไว้)") }
@@ -461,7 +461,7 @@ fun TemplatesPage(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) {
     var bulk by remember { mutableStateOf(false) }
     FormPage("แม่แบบ (รายการทุกเดือน)", onClose, onSave = { creating = true }, saveLabel = "+ เพิ่ม") {
         OutlinedButton(onClick = { bulk = true }, modifier = Modifier.fillMaxWidth()) { Text("📋 เพิ่มหลายรายการ (วางข้อความ)") }
-        Note("แม่แบบ = รายการที่เกิดทุกรอบ เช่น ค่าเช่าบ้าน ค่าเน็ต เงินเดือน — แผนบิลสร้างจากที่นี่ (กดซ้ำได้ ไม่สร้างซ้ำ) · หนี้สินไม่ต้องมีแม่แบบ แอพดึงยอดให้เอง")
+        Note("รายการที่เกิดทุกเดือน แผนบิลสร้างจากที่นี่ · หนี้สินไม่ต้องใส่ แอพดึงยอดให้เอง")
         val grouped = d.billTemplates.groupBy { if (it.section == PlanBook.SALARY) PlanBook.INCOME else PlanBook.sectionOf(it) }
         SECTION_LABELS.forEach { (section, label) ->
             val list = grouped[section].orEmpty().sortedWith(compareBy({ it.due_day ?: 99 }, { it.sort ?: 0 }))
@@ -536,7 +536,6 @@ private fun BulkPage(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) {
         Text("รอบที่ใส่รายการครั้งเดียว / สร้างแผน", fontWeight = FontWeight.Medium, color = p.ink)
         ChoiceChips(listOf(current to "รอบนี้ (${cycleLabel(current)})", next to "รอบหน้า (${cycleLabel(next)})"), cycle, { cycle = it })
         SwitchRow("สร้างแผนรอบนั้นจากแม่แบบเลย", generate, { generate = it }, sub = "รายการประจำจะขึ้นในแผนบิลทันที (หนี้สินดึงยอดให้เอง)")
-        Note("วางชื่อเดิมซ้ำ = แก้ยอด/วันที่ของแม่แบบเดิม ไม่สร้างซ้ำ")
     }
 }
 

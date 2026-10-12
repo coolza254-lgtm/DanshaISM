@@ -147,7 +147,6 @@ fun AccountEditor(d: DanshaData, existing: Account?, vm: MainViewModel, onClose:
             ChoiceChips(listOf("" to "ไม่ใช้", "ascend" to "Ascend PayNext", "spaylater" to "Shopee PayLater"), engine, { engine = it })
             if (engine.isNotEmpty()) {
                 DateField("เริ่มนับรายการตั้งแต่ (debt_since)", since, { since = it }, allowEmpty = true)
-                Note("รายการก่อนวันนี้ไม่นำมาคิด ใช้ยอดยกมา (snapshot) ของหนี้ย่อยแทน")
             }
             if (engine == "ascend") {
                 Row {
@@ -179,7 +178,6 @@ fun AccountEditor(d: DanshaData, existing: Account?, vm: MainViewModel, onClose:
                 if (isImageIcon(icon)) TextButton(onClick = { icon = "" }) { Text("ลบรูป ใช้สีแบรนด์แทน") }
             }
         }
-        Note("แคปโลโก้จากแอพธนาคารแล้วเลือกมาได้เลย แอพจะตัดเป็นวงกลมให้")
         if (!isImageIcon(icon)) {
             Picker("หรือใช้สีแบรนด์", BRANDS, if (BRANDS.any { it.first == icon }) icon else "", { icon = it })
             if (!icon.startsWith("brand:")) TextInput("หรืออีโมจิ (ว่าง = เดาจากชื่อบัญชี)", icon, { icon = it.take(4) })

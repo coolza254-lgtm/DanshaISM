@@ -53,7 +53,7 @@ fun ShopeePage(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onC
     val receiveDays = remember(d) { Engine.receiveDays(Engine.config(d)) }
 
     FormPage("Shopee", onClose, onSave = null) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        WrapRow {
             Button(onClick = { recording = true }) { Text("บันทึกออเดอร์") }
             OutlinedButton(onClick = { checking = true }) { Text("เช็คก่อนซื้อ") }
         }
@@ -88,9 +88,8 @@ fun ShopeePage(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onC
                     color = DanshaColors.Muted, fontSize = 13.sp,
                 )
                 if (o.status == SPayLater.WAITING) {
-                    Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Pill("📦 รอรับของ · คาดว่ารับ ${thaiDate(SPayLater.basisDate(o, receiveDays))}", LocalPalette.current.warningSoft, LocalPalette.current.ink)
-                        Spacer(Modifier.width(8.dp))
+                    WrapRow(Modifier.padding(top = 4.dp)) {
+                        Pill("📦 คาดว่ารับ ${shortThaiDate(SPayLater.basisDate(o, receiveDays))}", LocalPalette.current.warningSoft, LocalPalette.current.ink)
                         Text(
                             "ได้รับแล้ววันนี้ ›",
                             Modifier.clickable {
@@ -168,7 +167,6 @@ private fun PurchaseForm(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) 
             if ((tenor.toIntOrNull() ?: 1) > 1) AmountField("ค่างวด (ดูจากแอพ Shopee)", installment, { installment = it }, supporting = "ต้องกรอก ถ้าผ่อนมากกว่า 1 งวด")
             ReceiveFields(received, { received = it }, receivedDate, { receivedDate = it }, date, receiveDays)
         } else {
-            Note("จ่ายเต็ม: จะสร้างรายจ่าย \"Shopee: …\" ให้อัตโนมัติ")
             val tree = Forms.categoryTree(d, "expense", keep = setOf(categoryId, subId))
             Picker("หมวด", listOf("" to "— ไม่ระบุ —") + tree.map { it.category.id to "${it.category.icon} ${it.category.name}" }, categoryId, { categoryId = it; subId = "" })
             val subs = tree.firstOrNull { it.category.id == categoryId }?.children.orEmpty()
@@ -246,7 +244,7 @@ private fun ReceiveFields(
         val est = runCatching { java.time.LocalDate.parse(orderDate).plusDays(receiveDays.toLong()).toString() }.getOrDefault(orderDate)
         Note("คาดว่าจะรับ (หรือระบบกดรับให้) ประมาณ ${thaiDate(est)} — ได้ของแล้วมากด \"ได้รับแล้ว\" ในรายการ")
     }
-    Note("ตัดรอบทุกวันที่ 15: กดรับ 1–14 → จ่าย 25 เดือนนี้ · กดรับตั้งแต่ 15 → จ่าย 25 เดือนหน้า")
+    Note("ตัดรอบวันที่ 15: รับ 1–14 → จ่าย 25 เดือนนี้ · รับ 15 ขึ้นไป → เดือนหน้า")
 }
 
 // ---------- เช็คก่อนซื้อ ----------

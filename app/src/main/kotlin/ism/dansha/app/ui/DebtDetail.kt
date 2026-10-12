@@ -69,7 +69,7 @@ fun DebtDetailPage(
         // ---- ยอดรวม ----
         Column(Modifier.fillMaxWidth().paperCard(p, p.card, radius = 14.dp).padding(16.dp)) {
             Text("หนี้คงเหลือ", color = p.muted, fontSize = 14.sp)
-            Text("฿" + m(st.outstanding), fontSize = 34.sp, fontWeight = FontWeight.Bold, color = p.negative)
+            FitText("฿" + m(st.outstanding), androidx.compose.ui.text.TextStyle(fontSize = 32.sp, fontWeight = FontWeight.Bold, fontFamily = Sarabun, color = p.negative))
             val limit = acc.credit_limit.num()
             if (limit > 0) {
                 Spacer(Modifier.height(6.dp))
@@ -120,7 +120,7 @@ fun DebtDetailPage(
         }
 
         // ---- ปุ่ม ----
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        WrapRow {
             OutlinedButton(onClick = onPay) { Text("จ่าย/โปะ") }
             if (st is AscendState) {
                 OutlinedButton(onClick = onQuote) { Text("ยอดปิด") }

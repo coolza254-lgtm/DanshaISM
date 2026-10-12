@@ -48,7 +48,7 @@ fun PortPage(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) {
     val pf = remember(d) { runCatching { Engine.portfolio(d) }.getOrNull() }
 
     FormPage("พอร์ตลงทุน", onClose, onSave = null) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        WrapRow {
             Button(onClick = { creating = true }) { Text("+ รายการ") }
             OutlinedButton(onClick = { pricing = true }) { Text("อัปเดตราคา") }
         }

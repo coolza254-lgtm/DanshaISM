@@ -240,7 +240,7 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
                                 )
                             }
                             if (guesses.isNotEmpty()) {
-                                Row(Modifier.fillMaxWidth().padding(top = 10.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                WrapRow(Modifier.padding(top = 10.dp)) {
                                     guesses.filter { it.categoryId.isNotEmpty() }.forEach { g ->
                                         val c = cats[g.subcategoryId.ifEmpty { g.categoryId }]
                                         val sel = g.categoryId == categoryId && g.subcategoryId == subId
@@ -289,10 +289,10 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
                         }.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { amountFocus.requestFocus() },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("฿", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = typeColor.copy(alpha = 0.75f))
+                        Text("฿", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = typeColor.copy(alpha = 0.75f))
                         Spacer(Modifier.width(8.dp))
                         Box(Modifier.weight(1f)) {
-                            val style = TextStyle(fontSize = 38.sp, fontWeight = FontWeight.Bold, color = typeColor, fontFamily = Sarabun, fontFeatureSettings = "tnum")
+                            val style = TextStyle(fontSize = 34.sp, fontWeight = FontWeight.Bold, color = typeColor, fontFamily = Sarabun, fontFeatureSettings = "tnum")
                             if (amount.isEmpty()) Text("0.00", style = style.copy(color = typeColor.copy(alpha = 0.25f)))
                             BasicTextField(
                                 value = amount,
@@ -385,7 +385,7 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
                         val subs = tree.firstOrNull { it.category.id == categoryId }?.children.orEmpty()
                         if (subs.isNotEmpty()) {
                             Spacer(Modifier.height(6.dp))
-                            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            WrapRow {
                                 SubChip("ทั้งหมวด", null, null, null, subId.isEmpty()) { subId = ""; touchedCat = true }
                                 subs.forEach { s -> SubChip(s.name, s.name, s.icon, s.color, subId == s.id) { subId = s.id; touchedCat = true } }
                             }
@@ -396,7 +396,7 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
                     SheetLabel("วันที่")
                     val today = Dates.todayStr()
                     val yesterday = Dates.today().minusDays(1).toString()
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    WrapRow {
                         SoftChip("วันนี้", date == today) { date = today }
                         SoftChip("เมื่อวาน", date == yesterday) { date = yesterday }
                         SoftChip(if (date != today && date != yesterday) thaiDate(date) else "เลือกวัน", date != today && date != yesterday, Icons.Outlined.CalendarMonth) { pickDate = true }
@@ -551,7 +551,7 @@ private fun SoftChip(label: String, selected: Boolean, icon: androidx.compose.ui
 @Composable
 private fun AccountChips(accounts: List<Account>, selected: String, onSelect: (String) -> Unit) {
     val p = LocalPalette.current
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    WrapRow {
         accounts.forEach { a ->
             val sel = a.id == selected
             val shape = RoundedCornerShape(50)

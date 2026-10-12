@@ -85,7 +85,6 @@ fun ShareCardPage(d: DanshaData, c: MainViewModel.Computed, vm: MainViewModel, o
     val p = LocalPalette.current
 
     FormPage("แชร์ให้แฟนดู", onClose, onSave = null) {
-        Note("ตัวอย่างรูปที่จะส่ง (อัปเดตตามข้อมูลล่าสุดทุกครั้ง)")
         Box(
             Modifier.fillMaxWidth().drawWithContent {
                 layer.record { this@drawWithContent.drawContent() }

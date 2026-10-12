@@ -212,7 +212,7 @@ fun tint(hex: String): Color {
 }
 
 /** กระดาษมีเส้นบรรทัดทุก 32dp + เส้นขอบหน้าแดงด้านซ้าย (วาดหลังเนื้อหา) */
-fun Modifier.notebookPaper(p: Palette, ruled: Boolean = true, marginX: Dp = 26.dp): Modifier = this
+fun Modifier.notebookPaper(p: Palette, ruled: Boolean = true, marginX: Dp = 13.dp): Modifier = this
     .background(p.bg)
     .drawBehind {
         if (ruled) {

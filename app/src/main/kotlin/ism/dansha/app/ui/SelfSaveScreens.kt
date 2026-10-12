@@ -84,7 +84,6 @@ fun PaySelfSavePage(d: DanshaData, st: SelfSave.Status, vm: MainViewModel, onClo
         }
     }, saveLabel = "โอนแล้ว") {
         error?.let { Note(it, DanshaColors.Negative) }
-        Note("โอนเงินจริงในแอพธนาคารก่อน แล้วกดบันทึกที่นี่ (แอพจดเป็นรายการโอนเข้าบัญชีลงทุน)", DanshaColors.Ink)
         if (st.settings.taxOn) AmountField("Myself Tax", tax, { tax = it }, supporting = "ค้าง ${formatMoney(st.taxDue)}")
         if (st.settings.discountOn) AmountField("No Discount (ส่วนลด)", disc, { disc = it }, supporting = "ค้าง ${formatMoney(st.discountDue)}")
         Picker("โอนจาก", accounts, from, { from = it })
@@ -122,7 +121,7 @@ fun SelfSavePage(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) {
         if (st.enabled) {
             Column(Modifier.fillMaxWidth().paperCard(p, p.positiveSoft, radius = 14.dp).padding(16.dp)) {
                 Text("รอโอนเข้าบัญชีลงทุน", color = p.ink.copy(alpha = 0.8f), fontSize = 14.sp)
-                Text("฿" + formatMoney(st.totalDue), fontSize = 34.sp, fontWeight = FontWeight.Bold, color = p.positive)
+                FitText("฿" + formatMoney(st.totalDue), androidx.compose.ui.text.TextStyle(fontSize = 32.sp, fontWeight = FontWeight.Bold, fontFamily = Sarabun, color = p.positive))
                 if (s.taxOn) KeyValue("Myself Tax (สะสม ${formatMoney(st.taxAccrued)} · โอนแล้ว ${formatMoney(st.taxPaid)})", formatMoney(st.taxDue), bold = true)
                 if (s.discountOn) KeyValue("No Discount (สะสม ${formatMoney(st.discountAccrued)} · โอนแล้ว ${formatMoney(st.discountPaid)})", formatMoney(st.discountDue), bold = true)
                 if (st.today > 0) KeyValue("เกิดวันนี้", "+" + formatMoney(st.today), p.positive)

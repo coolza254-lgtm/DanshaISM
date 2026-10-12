@@ -87,10 +87,10 @@ val LocalOpenMore = androidx.compose.runtime.staticCompositionLocalOf<(() -> Uni
 @Composable
 fun ScreenTitle(title: String, subtitle: String? = null, actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {}) {
     val openMore = LocalOpenMore.current
-    Row(Modifier.fillMaxWidth().padding(start = 36.dp, end = 8.dp, top = 18.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 8.dp, top = 18.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(title, fontFamily = Hand, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = DanshaColors.Primary, lineHeight = 34.sp)
-            if (subtitle != null) Text(subtitle, color = DanshaColors.Muted, fontSize = 14.sp)
+            Text(title, fontFamily = Hand, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = DanshaColors.Primary, lineHeight = 32.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (subtitle != null) Text(subtitle, color = DanshaColors.Muted, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         actions()
         if (openMore != null) {
@@ -109,7 +109,7 @@ fun Card(modifier: Modifier = Modifier, padding: androidx.compose.ui.unit.Dp = 1
     val inForm = LocalInForm.current
     Column(
         modifier
-            .padding(start = if (inForm) 0.dp else 36.dp, end = if (inForm) 0.dp else 16.dp, top = if (inForm) 0.dp else 8.dp, bottom = if (inForm) 0.dp else 8.dp)
+            .padding(start = if (inForm) 0.dp else 22.dp, end = if (inForm) 0.dp else 12.dp, top = if (inForm) 0.dp else 8.dp, bottom = if (inForm) 0.dp else 8.dp)
             .fillMaxWidth()
             .paperCard(p, color ?: p.card)
             .padding(padding)

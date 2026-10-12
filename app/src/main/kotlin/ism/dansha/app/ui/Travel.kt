@@ -66,8 +66,8 @@ fun TravelSummary(tp: PlanBook.TravelPlan, openClaims: Int, openClaimTotal: Doub
                 fontSize = 13.sp, color = p.muted, modifier = Modifier.padding(top = 6.dp),
             )
         }
-        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onWorkDays) { Text(if (tp.days == 0) "📅 วางแผนวันทำงาน" else "🚌 เปิดหน้าค่าเดินทาง") }
+        WrapRow(Modifier.padding(top = 8.dp)) {
+            Button(onClick = onWorkDays) { Text(if (tp.days == 0) "📅 วางแผนวันทำงาน" else "🚌 จดค่ารถ / แผน") }
             OutlinedButton(onClick = onClaims) { Text(if (openClaims > 0) "🧾 เบิก Grab ($openClaims)" else "🧾 Staff Claim") }
         }
         if (openClaims > 0) Text("Grab รอส่งเบิก $openClaims เที่ยว ฿${formatMoney(openClaimTotal)} — ส่งภายในวันที่ 15 ได้เงินวันที่ 30", fontSize = 13.sp, color = p.warning, modifier = Modifier.padding(top = 6.dp))
@@ -78,7 +78,7 @@ fun TravelSummary(tp: PlanBook.TravelPlan, openClaims: Int, openClaimTotal: Doub
 private fun TravelStat(label: String, value: Double, color: Color, modifier: Modifier) {
     Column(modifier) {
         Text(label, fontSize = 12.sp, color = LocalPalette.current.muted)
-        Text("฿" + formatMoney(value), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = color)
+        FitText("฿" + formatMoney(value), androidx.compose.ui.text.TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold, fontFamily = Sarabun, color = color), minSize = 11.sp)
     }
 }
 
@@ -181,13 +181,13 @@ fun WorkDaysPage(d: DanshaData, cycle: String, vm: MainViewModel, onClose: () ->
             }
         }
         // คำอธิบายสี
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        WrapRow(gap = 10.dp) {
             Legend(p.primarySoft, "🚌 ไปทำงาน")
             Legend(p.stickyBlue, "🌙 กะดึก")
             Legend(p.warningSoft, "จดไม่ครบ")
             Legend(p.positiveSoft, "✓ จ่ายแล้ว")
         }
-        if (planMode) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (planMode) WrapRow {
             OutlinedButton(onClick = {
                 val days = tp.list.map { PlanBook.WorkDay(it.date, it.late) }.toMutableList()
                 var x = rs
@@ -216,7 +216,7 @@ fun WorkDaysPage(d: DanshaData, cycle: String, vm: MainViewModel, onClose: () ->
             Spacer(Modifier.width(8.dp))
             AmountField("Grab กลับ (ประมาณ)", grab, { grab = it }, Modifier.weight(1f))
         }
-        Note("รถเมล์ราคา 8 / 12 / 20 แล้วแต่คันไหนมาก่อน เลยเผื่อแพงสุดไว้ก่อน (20) จ่ายจริงเท่าไหร่ค่อยกดตามจริง · วันกะดึกไม่มีรถเมล์ขากลับ (นั่ง Grab)")
+        Note("เผื่อรถเมล์แพงสุดไว้ก่อน จ่ายจริงเท่าไหร่ค่อยกดตามจริง")
         if (bus != amountText(fares.bus) || grab != amountText(fares.grab)) {
             Button(onClick = {
                 vm.edit<Unit>(ok = "บันทึกราคาเผื่อแล้ว") { setConfig(mapOf("travel_bus" to bus.ifEmpty { "20" }, "travel_grab" to grab.ifEmpty { "0" })); syncPlan(cycle) }
@@ -235,7 +235,7 @@ private fun TypeTabs(planMode: Boolean, onChange: (Boolean) -> Unit) {
     val p = LocalPalette.current
     val shape = RoundedCornerShape(50)
     Row(Modifier.fillMaxWidth().clip(shape).background(p.surface).border(1.5.dp, p.ink.copy(alpha = 0.6f), shape).padding(3.dp)) {
-        listOf(true to "📅 วางแผนวันไปทำงาน", false to "✅ จดค่ารถจริง").forEach { (v, label) ->
+        listOf(true to "📅 วางแผน", false to "✅ จดค่ารถจริง").forEach { (v, label) ->
             Box(
                 Modifier.weight(1f).clip(shape).background(if (v == planMode) p.primary else Color.Transparent).clickable { onChange(v) }.padding(vertical = 9.dp),
                 contentAlignment = Alignment.Center,
@@ -371,7 +371,6 @@ fun GrabPage(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) {
         DateField("วันที่", date, { date = it })
         Picker("จ่ายจาก", Forms.accountChoices(d, accountId).map { it.id to it.name }, accountId, { accountId = it })
         TextInput("โน้ต (ไม่บังคับ)", note, { note = it }, placeholder = "Grab กลับบ้าน (เบิกได้)")
-        Note("รายการนี้จะไปรอใน Staff Claim — ส่งใบเบิกภายในวันที่ 15 ได้เงินคืนวันที่ 30 เดือนนั้น ไม่ทันได้เดือนถัดไป")
     }
 }
 
@@ -391,7 +390,7 @@ fun ClaimPage(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) {
 
     FormPage("Staff Claim (เบิกค่า Grab)", onClose, onSave = null) {
         error?.let { Note(it, p.negative) }
-        Note("กติกา: ส่งใบเบิกภายในวันที่ 15 → ได้เงินวันที่ 30 เดือนนั้น · ส่งหลังวันที่ 15 → ได้วันที่ 30 เดือนถัดไป", p.ink)
+        Note("ส่งภายในวันที่ 15 → ได้เงินวันที่ 30 · หลังวันที่ 15 → 30 เดือนหน้า", p.ink)
         OutlinedButton(onClick = { grab = true }, modifier = Modifier.fillMaxWidth()) { Text("+ จด Grab กลับบ้าน") }
 
         Text("รอส่งเบิก (${open.size} เที่ยว)", fontWeight = FontWeight.SemiBold, color = p.ink)
@@ -495,7 +494,6 @@ fun SlipPage(d: DanshaData, cycle: String, vm: MainViewModel, onClose: () -> Uni
     FormPage("เงินเดือนจาก Slip", onClose, ::save, saveLabel = "รับเงินแล้ว") {
         error?.let { Note(it, p.negative) }
         if (salaryBill?.status == "paid") Note("รอบนี้บันทึกเงินเดือนไปแล้ว ${formatMoney(salaryBill.actual_amount)} — กดบันทึกอีกจะเพิ่มเป็นรายการใหม่", p.negative)
-        Note("กรอกตาม Slip (ออกวันที่ 14) แอพจำรายการและยอดครั้งก่อนไว้ แก้เฉพาะตัวที่เปลี่ยน", p.ink)
         lines.forEachIndexed { i, l ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -510,7 +508,7 @@ fun SlipPage(d: DanshaData, cycle: String, vm: MainViewModel, onClose: () -> Uni
                 AmountField("ยอด", l.amount, { lines[i] = l.copy(amount = it) }, Modifier.weight(1f))
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        WrapRow {
             OutlinedButton(onClick = { lines.add(SlipLine("", true, "")) }) { Text("+ เพิ่มบรรทัด") }
             if (lines.size > 1) OutlinedButton(onClick = { lines.removeAt(lines.lastIndex) }) { Text("ลบบรรทัดสุดท้าย") }
         }

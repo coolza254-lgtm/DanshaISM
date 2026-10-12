@@ -77,7 +77,7 @@ fun TransactionsScreen(d: DanshaData, vm: MainViewModel, header: @Composable () 
             item { ScreenTitle("รายการ") }
             item { header() }
             item {
-                Column(Modifier.padding(start = 36.dp, end = 16.dp)) {
+                Column(Modifier.padding(start = 22.dp, end = 12.dp)) {
                     TextInput("ค้นหา (โน้ต หมวด บัญชี ยอด)", query, { query = it })
                     if (!searching) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -96,14 +96,14 @@ fun TransactionsScreen(d: DanshaData, vm: MainViewModel, header: @Composable () 
                     }
                 }
             }
-            if (rows.isEmpty()) item { Text(if (searching) "ไม่พบรายการ" else "ยังไม่มีรายการในรอบนี้", Modifier.padding(start = 36.dp, end = 16.dp, top = 16.dp, bottom = 16.dp), color = DanshaColors.Muted) }
+            if (rows.isEmpty()) item { Text(if (searching) "ไม่พบรายการ" else "ยังไม่มีรายการในรอบนี้", Modifier.padding(start = 22.dp, end = 12.dp, top = 16.dp, bottom = 16.dp), color = DanshaColors.Muted) }
             byDay.forEach { (date, list) ->
                 item(key = "h_$date") {
                     val net = list.sumOf { t -> when (t.type) { "income" -> t.amount ?: BigDecimal.ZERO; "expense" -> (t.amount ?: BigDecimal.ZERO).negate(); else -> BigDecimal.ZERO } }
                     DayHeader(thaiDate(date), (if (net.signum() < 0) "−" else if (net.signum() > 0) "+" else "") + formatMoney(net.abs()))
                 }
                 items(list, key = { it.id }, contentType = { "txn" }) { t ->
-                    TransactionRow(t, accounts, categories) { editing = t }
+                    Box(Modifier.animateItem()) { TransactionRow(t, accounts, categories) { editing = t } }
                 }
             }
             item { Spacer(Modifier.height(24.dp)) }
@@ -131,7 +131,7 @@ fun TransactionRow(
         else -> "" to p.ink
     }
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 36.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 22.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (showDate) {
@@ -159,7 +159,7 @@ fun TransactionRow(
 @Composable
 fun DayHeader(text: String, right: String? = null) {
     val p = LocalPalette.current
-    Row(Modifier.fillMaxWidth().padding(start = 36.dp, end = 16.dp, top = 12.dp, bottom = 2.dp), verticalAlignment = Alignment.Bottom) {
+    Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 12.dp, top = 12.dp, bottom = 2.dp), verticalAlignment = Alignment.Bottom) {
         Text(text, Modifier.background(p.highlight).padding(horizontal = 6.dp), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = p.ink)
         Spacer(Modifier.weight(1f))
         if (right != null) Text(right, fontSize = 14.sp, color = p.muted)

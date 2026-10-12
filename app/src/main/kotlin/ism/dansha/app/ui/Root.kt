@@ -268,7 +268,7 @@ private fun TabItem(t: Tab, selected: Boolean, modifier: Modifier, onClick: () -
 private fun TransactionsTab(d: DanshaData, vm: MainViewModel) {
     var summary by rememberSaveable { mutableStateOf(false) }
     val header: @Composable () -> Unit = {
-        Box(Modifier.padding(start = 36.dp, end = 16.dp, top = 4.dp, bottom = 4.dp)) {
+        Box(Modifier.padding(start = 22.dp, end = 12.dp, top = 4.dp, bottom = 4.dp)) {
             ChoiceChips(listOf(false to "รายการ", true to "สรุป"), summary, { summary = it })
         }
     }

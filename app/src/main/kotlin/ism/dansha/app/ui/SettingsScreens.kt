@@ -146,7 +146,6 @@ fun SettingsPage(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) {
             )
         }
         OutlinedButton(onClick = { vm.updateFxNow() }, modifier = Modifier.fillMaxWidth()) { Text("ดึงเรทล่าสุดตอนนี้") }
-        Note("แอพดึงเรทให้เองวันละครั้งเมื่อเปิดแอพ (open.er-api.com สำรองด้วย frankfurter.app)")
     }
     if (categories) CategoriesPage(d, vm) { categories = false }
 }

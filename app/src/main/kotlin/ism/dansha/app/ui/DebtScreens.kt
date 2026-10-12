@@ -68,7 +68,7 @@ fun DebtScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel) {
     LazyColumn(Modifier.fillMaxSize()) {
         item { ScreenTitle("หนี้") }
         if (c == null) {
-            item { Text("ยังไม่มีข้อมูล", Modifier.padding(start = 36.dp, end = 16.dp, top = 16.dp, bottom = 16.dp), color = DanshaColors.Muted) }
+            item { Text("ยังไม่มีข้อมูล", Modifier.padding(start = 22.dp, end = 12.dp, top = 16.dp, bottom = 16.dp), color = DanshaColors.Muted) }
             return@LazyColumn
         }
         val states = c.debts
@@ -155,7 +155,7 @@ private fun DebtAccountCard(d: DanshaData, acc: Account, st: DebtState, onOpen: 
         if (st is AscendState && st.cycleSpend.total > 0) {
             KeyValue("ใช้ในรอบบิล ${thaiDate(st.cycleSpend.start)} – ${thaiDate(st.cycleSpend.end)}", money(st.cycleSpend.total))
         }
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        WrapRow(Modifier.padding(top = 8.dp)) {
             OutlinedButton(onClick = { onAction(DebtAction.Pay(acc.id)) }) { Text("จ่าย/โปะ") }
             if (st is AscendState) {
                 OutlinedButton(onClick = { onAction(DebtAction.Quote(acc.id)) }) { Text("ยอดปิด") }
@@ -251,7 +251,6 @@ private fun PayDebtPage(d: DanshaData, c: MainViewModel.Computed?, accountId: St
                 quote.after?.let { KeyValue("คงเหลือหลังจ่าย", money(it.outstanding), bold = true) }
             }
         }
-        Note("บันทึกเป็นรายการโอนเข้าบัญชีวงเงิน ตัวคำนวณจะตัดดอก/ต้นให้อัตโนมัติ")
     }
 }
 
@@ -283,7 +282,6 @@ private fun QuotePage(d: DanshaData, accountId: String, onClose: () -> Unit) {
                 q.after?.let { KeyValue("คงเหลือหลังจ่าย", money(it.outstanding), bold = true) }
             }
         }
-        Note("จ่ายก่อนกำหนด = ดอกคิดถึงวันที่จ่ายจริง ยิ่งจ่ายเร็วยิ่งประหยัด")
     }
 }
 
@@ -321,7 +319,6 @@ private fun CashDrawPage(d: DanshaData, accountId: String, vm: MainViewModel, on
         Picker("โอนเข้าบัญชี", listOf("" to "— ไม่บันทึกการโอน —") + targets.map { it.id to it.name }, to, { to = it })
         DateField("วันที่", date, { date = it })
         TextInput("คำอธิบาย", note, { note = it }, placeholder = "เบิกเงินสด … (… งวด)")
-        Note("สร้างหนี้ย่อย + รายการโอนที่ผูกกัน ลบรายการโอนแล้วหนี้ย่อยจะถูกลบด้วย")
     }
 }
 

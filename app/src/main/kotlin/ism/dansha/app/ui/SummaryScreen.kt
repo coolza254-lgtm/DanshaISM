@@ -69,7 +69,7 @@ fun SummaryScreen(d: DanshaData, vm: MainViewModel, header: @Composable () -> Un
         item { ScreenTitle("สรุป", "${thaiDate(s.start)} – ${thaiDate(s.end)}") }
         item { header() }
         item {
-            Column(Modifier.padding(start = 36.dp, end = 16.dp)) {
+            Column(Modifier.padding(start = 22.dp, end = 12.dp)) {
                 ChoiceChips(
                     Summary.Preset.entries.map { it.name to it.label } + ("custom" to "เลือกเอง"),
                     if (custom) "custom" else preset.name,

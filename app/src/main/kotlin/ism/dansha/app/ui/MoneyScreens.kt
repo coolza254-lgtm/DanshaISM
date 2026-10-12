@@ -64,7 +64,8 @@ private fun money(v: Double?): String = formatMoney(v)
 internal fun KeyValue(label: String, value: String, color: Color = DanshaColors.Ink, bold: Boolean = false) {
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
         Text(label, Modifier.weight(1f), color = DanshaColors.Muted, fontSize = 14.sp)
-        Text(value, color = color, fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal, fontSize = 14.sp)
+        Spacer(Modifier.width(8.dp))
+        Text(value, color = color, fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal, fontSize = 14.sp, textAlign = androidx.compose.ui.text.style.TextAlign.End)
     }
 }
 
@@ -132,15 +133,15 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
             val end = Dates.parse(ov.payCycleRange.end)
             val total = ChronoUnit.DAYS.between(start, end).toInt() + 1
             val passed = (total - h.daysLeft + 1).coerceIn(1, total)
-            Box(Modifier.padding(start = 36.dp, end = 16.dp, top = 14.dp, bottom = 8.dp).fillMaxWidth()) {
+            Box(Modifier.padding(start = 22.dp, end = 12.dp, top = 14.dp, bottom = 8.dp).fillMaxWidth()) {
                 Column(Modifier.fillMaxWidth().paperCard(p).padding(start = 18.dp, end = 18.dp, top = 22.dp, bottom = 16.dp)) {
                     Text("วันนี้ใช้ได้", color = p.muted, fontSize = 16.sp, fontWeight = FontWeight.Medium)
                     Box {
                         Box(Modifier.matchParentSize().padding(top = 26.dp, bottom = 6.dp).background(p.highlight))
-                        Text(
+                        FitText(
                             (if (h.perDay < 0) "−฿" else "฿") + money(kotlin.math.abs(h.perDay)),
-                            fontSize = 42.sp, fontWeight = FontWeight.Bold, lineHeight = 48.sp,
-                            color = if (h.perDay < 0) p.negative else p.primary,
+                            androidx.compose.ui.text.TextStyle(fontSize = 40.sp, fontWeight = FontWeight.Bold, lineHeight = 46.sp, fontFamily = Sarabun, color = if (h.perDay < 0) p.negative else p.primary),
+                            minSize = 22.sp,
                         )
                     }
                     Text(
@@ -166,7 +167,7 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
 
         // เงินที่มี / หนี้ (บรรทัดในสมุด)
         item {
-            Column(Modifier.padding(start = 36.dp, end = 16.dp, top = 4.dp)) {
+            Column(Modifier.padding(start = 22.dp, end = 12.dp, top = 4.dp)) {
                 LedgerLine("เงินที่มีตอนนี้", signedBaht(h.cashNow), if (h.cashNow < 0) p.negative else p.positive)
                 LedgerLine("หนี้คงเหลือ", "฿" + money(h.debtTotal), p.negative, onClick = onOpenDebt)
             }
@@ -174,7 +175,7 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
 
         // กระดาษโน้ต: บิลถัดไป + 60/40
         item {
-            Row(Modifier.padding(start = 36.dp, end = 16.dp, top = 12.dp, bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.padding(start = 22.dp, end = 12.dp, top = 12.dp, bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 h.nextDebtBill?.let { b ->
                     val days = Reminders.daysUntil(ov.today, b.due)
                     StickyNote(p.sticky, -0.6f, Modifier.weight(1f).clickable(onClick = onOpenDebt)) {
@@ -183,7 +184,7 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
                             fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (b.overdue || days <= 3) p.negative else p.ink.copy(alpha = 0.8f),
                         )
                         Text(b.accountName, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text("฿" + money(b.amount), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = p.negative)
+                        FitText("฿" + money(b.amount), androidx.compose.ui.text.TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold, fontFamily = Sarabun, color = p.negative), minSize = 14.sp)
                         Text("ครบ ${thaiDate(b.due)}", fontSize = 13.sp, color = p.ink.copy(alpha = 0.8f))
                     }
                 }
@@ -191,20 +192,20 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
                     StickyNote(p.stickyBlue, 0.6f, Modifier.weight(1f)) {
                         Text("60/40 · อีก ${cp.daysLeft} วัน", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = p.ink.copy(alpha = 0.8f))
                         Text("รัฐช่วยได้วันนี้", fontSize = 15.sp, color = p.ink)
-                        Text("฿" + money(cp.leftToday), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = p.primary)
+                        FitText("฿" + money(cp.leftToday), androidx.compose.ui.text.TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold, fontFamily = Sarabun, color = p.primary), minSize = 14.sp)
                         Text("ซื้อเต็มได้ถึง ฿" + money(cp.fullPriceForToday), fontSize = 13.sp, color = p.ink.copy(alpha = 0.8f))
                     }
                 }
             }
         }
         h.cycleSpend.filter { it.second.total > 0 }.forEach { (name, cs) ->
-            item { Text("$name ใช้ในรอบบิล ${thaiDate(cs.start)} – ${thaiDate(cs.end)}: ฿${money(cs.total)}", Modifier.padding(start = 36.dp, end = 16.dp, top = 4.dp), color = p.muted, fontSize = 13.sp) }
+            item { Text("$name ใช้ในรอบบิล ${thaiDate(cs.start)} – ${thaiDate(cs.end)}: ฿${money(cs.total)}", Modifier.padding(start = 22.dp, end = 12.dp, top = 4.dp), color = p.muted, fontSize = 13.sp) }
         }
 
         // พอร์ต
         ov.port?.let { port ->
             item {
-                Column(Modifier.padding(start = 36.dp, end = 16.dp, top = 8.dp)) {
+                Column(Modifier.padding(start = 22.dp, end = 12.dp, top = 8.dp)) {
                     LedgerLine("พอร์ตลงทุน (${if (port.unrealizedThb >= 0) "+" else ""}${port.unrealizedPct}%)", "฿" + money(port.valueThb), if (port.unrealizedThb >= 0) p.positive else p.negative)
                 }
             }
@@ -213,7 +214,7 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
         // บัญชี
         item { SectionHeader("บัญชี") }
         item {
-            LazyRow(contentPadding = PaddingValues(start = 36.dp, end = 16.dp, top = 4.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            LazyRow(contentPadding = PaddingValues(start = 22.dp, end = 12.dp, top = 4.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(activeAccounts, key = { it.account.id }) { a ->
                     AccountCard(a)
                 }
@@ -253,8 +254,9 @@ fun LedgerLine(label: String, value: String, valueColor: Color, onClick: (() -> 
             },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, Modifier.weight(1f), fontSize = 16.sp, color = p.ink)
-        Text(value, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = valueColor)
+        Text(label, Modifier.weight(1f), fontSize = 16.sp, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.width(8.dp))
+        Text(value, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = valueColor, maxLines = 1)
     }
 }
 
@@ -293,7 +295,7 @@ fun DayBoxes(total: Int, passed: Int) {
 
 @Composable
 fun SectionHeader(title: String, action: String? = null, onAction: (() -> Unit)? = null) {
-    Row(Modifier.fillMaxWidth().padding(start = 36.dp, end = 16.dp, top = 16.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 12.dp, top = 16.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, Modifier.weight(1f), fontFamily = Hand, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = DanshaColors.Primary)
         if (action != null && onAction != null) Text(action, Modifier.clickable(onClick = onAction).padding(vertical = 8.dp), color = DanshaColors.Primary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
     }
