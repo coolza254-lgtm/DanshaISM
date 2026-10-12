@@ -169,7 +169,7 @@ object QuickEntry {
      * คำแนะนำเรียงจากน่าจะใช่ที่สุด (สูงสุด limit รายการ หมวดไม่ซ้ำกัน)
      * ไม่มีข้อความ = แนะนำจากรายการที่จดบ่อยช่วงนี้
      */
-    fun suggest(d: DanshaData, input: String, today: LocalDate = Dates.today(), limit: Int = 3): List<Guess> {
+    fun suggest(d: DanshaData, input: String, today: LocalDate = Dates.today(), limit: Int = 3, hour: Int = java.time.LocalTime.now().hour): List<Guess> {
         val p = parse(d, input)
         val q = normalize(p.text)
         val cats = d.categories.associateBy { it.id }
@@ -177,17 +177,30 @@ object QuickEntry {
         val scores = HashMap<Key, Double>()
         val accVotes = HashMap<Key, HashMap<String, Double>>()
         val notes = HashMap<Key, Pair<String, Double>>()
+        // ยอดที่จ่ายบ่อยของรายการนั้น (เช่น กาแฟ 55 ทุกวัน) → เติมยอดให้เองเมื่อพิมพ์แค่ชื่อ
+        val typical = HashMap<Key, Pair<Double, Double>>()
 
         // 1) จากประวัติ
         for (t in d.transactions) {
             if (t.type == "transfer" || t.category_id.isEmpty()) continue
             if (p.type != null && t.type != p.type) continue
             val n = normalize(t.note.ifEmpty { cats[t.subcategory_id]?.name ?: cats[t.category_id]?.name.orEmpty() })
-            val sim = if (q.isEmpty()) 0.35 else similarity(q, n)
-            if (sim < 0.45) continue
+            val sim = if (q.isEmpty()) 0.3 else similarity(q, n)
+            if (sim < 0.45 && q.isNotEmpty()) continue
             val age = runCatching { ChronoUnit.DAYS.between(LocalDate.parse(t.date), today).coerceAtLeast(0) }.getOrDefault(365L)
-            val w = sim * (0.4 + 0.6 * exp(-age / 60.0))
+            var base = sim
+            // ยอดเท่ากันเป๊ะ = น่าจะเป็นรายการเดิม (กาแฟ 55, ค่ารถ 12)
+            val amt = t.amount.num()
+            if (p.amount != null && amt > 0) {
+                val diff = kotlin.math.abs(amt - p.amount)
+                base += when { diff < 0.005 -> 0.5; diff <= amt * 0.1 -> 0.1; else -> 0.0 }
+            }
+            // จดช่วงเวลาเดียวกันของวัน (±2 ชม.) มักเป็นรายการเดิม เช่น กาแฟเช้า ข้าวเที่ยง
+            val h = t.created_at.drop(11).take(2).toIntOrNull()
+            if (h != null && kotlin.math.abs(h - hour) <= 2) base *= 1.25
+            val w = base * (0.4 + 0.6 * exp(-age / 60.0))
             val k = Key(t.type, t.category_id, t.subcategory_id)
+            if (amt > 0 && sim >= 0.6 && w > (typical[k]?.second ?: 0.0)) typical[k] = amt to w
             scores[k] = (scores[k] ?: 0.0) + w
             if (t.account_id in activeAcc) accVotes.getOrPut(k) { HashMap() }.merge(t.account_id, w, Double::plus)
             if (t.note.isNotEmpty() && sim > (notes[k]?.second ?: 0.0)) notes[k] = t.note to sim
@@ -222,7 +235,10 @@ object QuickEntry {
             val acc = p.accountId
                 ?: accVotes[k]?.maxByOrNull { it.value }?.key
                 ?: Forms.defaultAccount(d, k.type)
-            Guess(k.type, k.cat, k.sub, acc, p.text.ifEmpty { notes[k]?.first.orEmpty() }, p.amount, s.coerceIn(0.0, 1.0))
+            Guess(
+                k.type, k.cat, k.sub, acc, p.text.ifEmpty { notes[k]?.first.orEmpty() },
+                p.amount ?: typical[k]?.first?.takeIf { q.isNotEmpty() }, s.coerceIn(0.0, 1.0),
+            )
         }.ifEmpty {
             if (p.amount == null && p.text.isEmpty()) emptyList()
             else listOf(Guess(fallbackType, "", "", p.accountId ?: Forms.defaultAccount(d, fallbackType), p.text, p.amount, 0.0))

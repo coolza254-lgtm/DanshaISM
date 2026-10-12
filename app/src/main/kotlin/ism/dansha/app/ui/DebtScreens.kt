@@ -62,41 +62,74 @@ private sealed interface DebtAction {
 
 @Composable
 fun DebtScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel) {
+    val p = LocalPalette.current
     var action by remember { mutableStateOf<DebtAction?>(null) }
     // หน้ารายละเอียดของบัญชี (เปิดค้างไว้ได้ระหว่างจ่าย/แก้ไข)
     var detail by remember { mutableStateOf<String?>(null) }
-    LazyColumn(Modifier.fillMaxSize()) {
-        item { ScreenTitle("หนี้") }
-        if (c == null) {
-            item { Text("ยังไม่มีข้อมูล", Modifier.padding(start = 22.dp, end = 12.dp, top = 16.dp, bottom = 16.dp), color = DanshaColors.Muted) }
+    val accounts = remember(d) { d.accounts.associateBy { it.id } }
+    val states = c?.debts.orEmpty().filterKeys { accounts[it]?.active == true || (c?.debts?.get(it)?.outstanding ?: 0.0) > 0.004 }
+    // บิลถัดไปของแต่ละบัญชี เรียงตามวันครบกำหนด
+    val upcoming = remember(c) {
+        states.values.mapNotNull { st -> accounts[st.accountId]?.let { dueBills(it, st, 1).firstOrNull() } }.sortedBy { it.due }
+    }
+
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp)) {
+        item { ScreenTitle("หนี้สิน") }
+        if (c == null || states.isEmpty()) {
+            item { Card { Text("ยังไม่มีบัญชีหนี้ที่ผูกตัวคำนวณ", color = p.muted) } }
             return@LazyColumn
         }
-        val states = c.debts
         val ascend = states.values.filterIsInstance<AscendState>()
+        val total = states.values.sumOf { it.outstanding }
+        val payoff = ascend.sumOf { it.payoffToday } + states.values.filterIsInstance<SplState>().sumOf { it.outstanding }
+        val limit = states.keys.sumOf { accounts[it]?.credit_limit.num() }
+
+        // ภาพรวม
         item {
             Card {
-                val total = states.values.sumOf { it.outstanding }
-                val interest = ascend.sumOf { it.accruedInterest }
-                val payoff = ascend.sumOf { it.payoffToday } + states.values.filterIsInstance<SplState>().sumOf { it.outstanding }
-                KeyValue("หนี้รวม (ตัวคำนวณ)", money(total), DanshaColors.Negative, bold = true)
-                KeyValue("ดอกสะสมถึงวันนี้", money(interest))
-                KeyValue("ปิดทั้งหมดวันนี้", money(payoff))
-                if (ascend.size > 1) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "กลยุทธ์: โปะ PayNext ธรรมดาให้หมดก่อน (ผ่อนสั้น ดอกต่องวดแรงกว่า) ส่วน Extra จ่ายตามบิลพอ",
-                        Modifier.background(DanshaColors.Surface, RoundedCornerShape(8.dp)).padding(10.dp),
-                        fontSize = 13.sp,
-                    )
+                Text("หนี้คงเหลือทั้งหมด", color = p.muted, fontSize = 14.sp)
+                FitText("฿" + money(total), androidx.compose.ui.text.TextStyle(fontSize = 34.sp, fontWeight = FontWeight.Bold, fontFamily = Sarabun, color = p.negative), minSize = 20.sp)
+                if (limit > 0) {
+                    Spacer(Modifier.height(6.dp))
+                    ProgressBar((total / limit).toFloat(), p.negative, p.negativeSoft, height = 8)
+                    Text("ใช้ไป ${(total / limit * 100).toInt()}% ของวงเงินรวม ${formatMoney(limit)}", fontSize = 12.sp, color = p.muted, modifier = Modifier.padding(top = 4.dp))
+                }
+                Spacer(Modifier.height(10.dp))
+                Row {
+                    MiniStat("งวดถัดไปรวม", "฿" + money(upcoming.sumOf { it.amount }), Modifier.weight(1f), p.primary)
+                    MiniStat("ดอกสะสมวันนี้", "฿" + money(ascend.sumOf { it.accruedInterest }), Modifier.weight(1f), p.negative)
+                    MiniStat("ปิดหมดวันนี้", "฿" + money(payoff), Modifier.weight(1f))
                 }
             }
         }
-        val accounts = d.accounts.associateBy { it.id }
+
+        // ต้องจ่ายเร็วๆ นี้
+        if (upcoming.isNotEmpty()) {
+            item { SectionHeader("ต้องจ่ายเร็วๆ นี้") }
+            item {
+                Card {
+                    upcoming.forEachIndexed { i, b ->
+                        if (i > 0) HorizontalDivider(Modifier.padding(vertical = 4.dp), color = p.line)
+                        DueBillRow(b, showAccount = true, onPay = { action = DebtAction.Pay(b.account.id) })
+                    }
+                    Text("แตะงวดเพื่อดูว่ามาจากก้อนไหน ต้น/ดอกเท่าไหร่", fontSize = 12.sp, color = p.muted, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        }
+
+        // บัญชี
+        item { SectionHeader("แยกตามบัญชี") }
         states.values.forEach { st ->
             val acc = accounts[st.accountId] ?: return@forEach
-            item(key = st.accountId) { DebtAccountCard(d, acc, st, onOpen = { detail = acc.id }) { action = it } }
+            item(key = st.accountId) { DebtAccountCard(acc, st, onOpen = { detail = acc.id }, onPay = { action = DebtAction.Pay(acc.id) }) }
         }
-        item { Spacer(Modifier.height(24.dp)) }
+        if (ascend.size > 1) {
+            item {
+                Card(color = p.sticky) {
+                    Text("💡 โปะ PayNext ธรรมดาให้หมดก่อน (ผ่อนสั้น ดอกต่องวดแรงกว่า) ส่วน Extra จ่ายตามบิลพอ", fontSize = 13.sp, color = p.ink)
+                }
+            }
+        }
     }
 
     detail?.let { id ->
@@ -125,85 +158,53 @@ fun DebtScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel) {
     }
 }
 
+/** การ์ดบัญชีหนี้: ยอดคงเหลือ + แถบวงเงิน + งวดถัดไป + ปุ่มจ่าย/ดูละเอียด */
 @Composable
-private fun DebtAccountCard(d: DanshaData, acc: Account, st: DebtState, onOpen: () -> Unit, onAction: (DebtAction) -> Unit) {
-    var open by remember { mutableStateOf(false) }
+private fun DebtAccountCard(acc: Account, st: DebtState, onOpen: () -> Unit, onPay: () -> Unit) {
+    val p = LocalPalette.current
+    val next = remember(st) { dueBills(acc, st, 1).firstOrNull() }
+    val limit = acc.credit_limit.num()
     Card(Modifier.clickable(onClick = onOpen)) {
-        androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            AccountBadge(acc, 30)
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            AccountBadge(acc, 36)
             Spacer(Modifier.width(10.dp))
-            Text(acc.name, Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
-            Text("ดูทั้งหมด ›", color = DanshaColors.Primary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-        }
-        Spacer(Modifier.height(4.dp))
-        KeyValue("ใช้ไป / วงเงิน", "${money(st.outstanding)} / ${formatMoney(acc.credit_limit)}", bold = true)
-        if (st is AscendState) {
-            KeyValue("ดอกสะสมถึงวันนี้", money(st.accruedInterest))
-            KeyValue("ดอกต่อวันประมาณ", money(st.dailyInterest))
-            KeyValue("ปิดหนี้วันนี้", money(st.payoffToday))
-            if (st.fees > 0) KeyValue("ค่าธรรมเนียมค้าง", money(st.fees), DanshaColors.Negative)
-        }
-        st.currentBill?.let { b ->
-            KeyValue(
-                if (b.overdue == true || b.due < Dates.todayStr()) "บิลค้าง (เลยกำหนด ${thaiDate(b.due)})" else "บิลปัจจุบัน ครบ ${thaiDate(b.due)}",
-                money(b.amount), if (b.overdue == true) DanshaColors.Negative else DanshaColors.Ink, bold = true,
-            )
-        }
-        st.nextBill?.let { b ->
-            KeyValue("บิลถัดไป ออก ${thaiDate(b.date)} ครบ ${thaiDate(b.due)}", money(b.totalDue) + (b.interest?.let { " (ดอก ${money(it)})" } ?: ""))
-        }
-        if (st is AscendState && st.cycleSpend.total > 0) {
-            KeyValue("ใช้ในรอบบิล ${thaiDate(st.cycleSpend.start)} – ${thaiDate(st.cycleSpend.end)}", money(st.cycleSpend.total))
-        }
-        WrapRow(Modifier.padding(top = 8.dp)) {
-            OutlinedButton(onClick = { onAction(DebtAction.Pay(acc.id)) }) { Text("จ่าย/โปะ") }
-            if (st is AscendState) {
-                OutlinedButton(onClick = { onAction(DebtAction.Quote(acc.id)) }) { Text("ยอดปิด") }
-                OutlinedButton(onClick = { onAction(DebtAction.Draw(acc.id)) }) { Text("เบิกเงินสด") }
-                OutlinedButton(onClick = { onAction(DebtAction.EditDebt(acc.id, null)) }) { Text("+ หนี้ย่อย") }
+            Column(Modifier.weight(1f)) {
+                Text(acc.name, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = p.ink, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                val loans = when (st) {
+                    is AscendState -> "${st.loans.count { it.status != "closed" }} ก้อน · ดอก/วัน ฿${money(st.dailyInterest)}"
+                    is SplState -> "${st.perOrder.count { it.value.left > 0.004 }} ออเดอร์ที่ผ่อนอยู่"
+                }
+                Text(loans, fontSize = 12.sp, color = p.muted)
+            }
+            Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+                Text("฿" + money(st.outstanding), fontWeight = FontWeight.Bold, fontSize = 18.sp, color = p.negative, maxLines = 1)
+                Text("คงเหลือ", fontSize = 11.sp, color = p.muted)
             }
         }
-        TextButton(onClick = { open = !open }) { Text(if (open) "ซ่อนรายละเอียด" else "ดูหนี้ย่อย / บิลล่วงหน้า") }
-        if (open) {
-            when (st) {
-                is AscendState -> {
-                    st.loans.forEach { l ->
-                        val editable = d.debts.any { it.id == l.id }
-                        HorizontalDivider(color = DanshaColors.Line)
-                        Column(
-                            Modifier.fillMaxWidth().let { m -> if (editable) m.clickable { onAction(DebtAction.EditDebt(acc.id, l.id)) } else m }.padding(vertical = 6.dp),
-                            verticalArrangement = Arrangement.spacedBy(1.dp),
-                        ) {
-                            Text(l.desc.ifEmpty { KIND_LABELS[l.kind] ?: l.kind } + if (l.status == "closed") " (ปิดแล้ว)" else "", fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                            Text("กู้ ${thaiDate(l.start)} · ${money(l.principal)} · ${l.tenor} งวด งวดละ ${money(l.installment)}", color = DanshaColors.Muted, fontSize = 13.sp)
-                            Text("จ่ายแล้ว ${l.paidPeriods} งวด เหลือ ${l.periodsLeft} · คงเหลือ ${money(l.remaining)} · ดอกค้าง ${money(l.accruedInterest)}", fontSize = 13.sp)
-                            st.schedule?.get(l.id)?.take(3)?.let { rows ->
-                                Text(rows.joinToString("  ") { "${thaiDate(it.due)} ${money(it.O)}" }, color = DanshaColors.Muted, fontSize = 13.sp)
-                            }
-                        }
-                    }
-                    if (st.pendingFull.isNotEmpty()) {
-                        HorizontalDivider(color = DanshaColors.Line)
-                        Text("ยอดเต็มจำนวนค้าง", Modifier.padding(top = 6.dp), fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                        st.pendingFull.forEach { u -> KeyValue("${thaiDate(u.date)} ${u.desc}", money(u.remaining)) }
-                    }
-                    st.bills?.take(6)?.let { bills ->
-                        HorizontalDivider(color = DanshaColors.Line)
-                        Text("บิลล่วงหน้า (สมมติจ่ายตรงบิลทุกงวด)", Modifier.padding(top = 6.dp), fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                        bills.forEach { b -> KeyValue("ครบ ${thaiDate(b.due)}", "${money(b.totalDue)} (ดอก ${money(b.interest)})") }
-                    }
-                    if (st.payments.isNotEmpty()) {
-                        HorizontalDivider(color = DanshaColors.Line)
-                        Text("การชำระล่าสุด", Modifier.padding(top = 6.dp), fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                        st.payments.take(5).forEach { p -> KeyValue("${thaiDate(p.date)} ดอก ${money(p.interest)} ต้น ${money(p.principal)}", money(p.amount)) }
-                    }
+        if (limit > 0) {
+            Spacer(Modifier.height(8.dp))
+            ProgressBar((st.outstanding / limit).toFloat(), p.negative, p.negativeSoft, height = 6)
+            Text("วงเงิน ${formatMoney(limit)} · ว่าง ${money((limit - st.outstanding).coerceAtLeast(0.0))}", fontSize = 12.sp, color = p.muted, modifier = Modifier.padding(top = 3.dp))
+        }
+        next?.let { b ->
+            Row(
+                Modifier.fillMaxWidth().padding(top = 10.dp).background(if (b.overdue) p.negativeSoft else p.surface, RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    val days = ism.dansha.core.engine.Reminders.daysUntil(Dates.todayStr(), b.due)
+                    Text(
+                        if (b.overdue) "งวดค้าง · เลยกำหนด!" else "งวดถัดไป · ${if (days == 0) "วันนี้" else "อีก $days วัน"}",
+                        fontSize = 12.sp, color = if (b.overdue) p.negative else p.muted, fontWeight = FontWeight.SemiBold,
+                    )
+                    Text("ครบ ${thaiDate(b.due)}" + if (!b.issued) " (ประมาณ)" else "", fontSize = 13.sp, color = p.ink)
                 }
-                is SplState -> {
-                    st.installments.filter { it.left > 0.004 }.forEach { i ->
-                        KeyValue("${thaiDate(i.due)} ${i.item} (${i.k}/${i.n})", money(i.left))
-                    }
-                }
+                Text("฿" + money(b.amount), fontWeight = FontWeight.Bold, fontSize = 17.sp, color = p.ink)
             }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            androidx.compose.material3.Button(onClick = onPay, modifier = Modifier.weight(1f)) { Text("จ่าย / โปะ") }
+            OutlinedButton(onClick = onOpen, modifier = Modifier.weight(1f)) { Text("ดูทุกงวด ›") }
         }
     }
 }

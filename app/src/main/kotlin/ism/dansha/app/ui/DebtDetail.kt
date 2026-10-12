@@ -91,47 +91,61 @@ fun DebtDetailPage(
             }
         }
 
-        // ---- บิลที่ต้องจ่าย ----
-        val cur = st.currentBill
-        val next = st.nextBill
-        if (cur != null || next != null) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                cur?.let { b ->
-                    val late = b.overdue == true || b.due < Dates.todayStr()
-                    val days = Reminders.daysUntil(Dates.todayStr(), b.due)
-                    BillNote(
-                        if (late) "บิลค้าง · เลยกำหนด" else if (days == 0) "ต้องจ่ายวันนี้!" else "บิลนี้ · อีก $days วัน",
-                        b.amount, "ครบ ${thaiDate(b.due)}", if (late) p.negativeSoft else p.sticky, Modifier.weight(1f), late,
-                    )
-                }
-                next?.let { b ->
-                    if (cur == null || b.due != cur.due) {
-                        BillNote(
-                            "บิลถัดไป", b.totalDue,
-                            "ออก ${shortThaiDate(b.date)} · ครบ ${shortThaiDate(b.due)}" + (b.interest?.let { "\nดอก ${m(it)}" } ?: ""),
-                            p.stickyBlue, Modifier.weight(1f), false,
-                        )
+        // ---- งวดถัดไป (แยกว่ามาจากก้อนไหน) ----
+        val bills = remember(st) { dueBills(acc, st, 12) }
+        bills.firstOrNull()?.let { b ->
+            Column(Modifier.fillMaxWidth().paperCard(p, if (b.overdue) p.negativeSoft else p.sticky, radius = 14.dp).padding(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    DueChip(b.due, b.overdue)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(if (b.overdue) "งวดค้างจ่าย" else "งวดถัดไป", fontSize = 13.sp, color = p.ink.copy(alpha = 0.8f), fontWeight = FontWeight.SemiBold)
+                        FitText("฿" + m(b.amount), androidx.compose.ui.text.TextStyle(fontSize = 26.sp, fontWeight = FontWeight.Bold, fontFamily = Sarabun, color = p.negative), minSize = 16.sp)
+                        Text(if (b.issued) "บิลออกแล้ว · ครบ ${thaiDate(b.due)}" else "ประมาณการ · ครบ ${thaiDate(b.due)}", fontSize = 12.sp, color = p.muted)
                     }
                 }
+                if (b.parts.isNotEmpty()) BillPartsTable(b.parts)
+                androidx.compose.material3.Button(onClick = onPay, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) { Text("จ่ายงวดนี้ / โปะ") }
             }
-        }
-        if (st is AscendState) st.lastStatement?.let { ls ->
-            Note("บิลล่าสุดที่ออก ${thaiDate(ls.date)} ครบ ${thaiDate(ls.due)} ยอด ${m(ls.totalDue)}")
         }
 
         // ---- ปุ่ม ----
-        WrapRow {
-            OutlinedButton(onClick = onPay) { Text("จ่าย/โปะ") }
-            if (st is AscendState) {
-                OutlinedButton(onClick = onQuote) { Text("ยอดปิด") }
-                OutlinedButton(onClick = onDraw) { Text("เบิกเงินสด") }
-                OutlinedButton(onClick = onAddLoan) { Text("+ หนี้ย่อย") }
-            }
+        if (st is AscendState) WrapRow {
+            OutlinedButton(onClick = onQuote) { Text("ยอดปิดหนี้") }
+            OutlinedButton(onClick = onDraw) { Text("เบิกเงินสด") }
+            OutlinedButton(onClick = onAddLoan) { Text("+ ก้อนหนี้") }
         }
 
-        when (st) {
-            is AscendState -> AscendDetail(d, st, onEditLoan)
-            is SplState -> SplDetail(st)
+        // ---- แท็บ ----
+        var tab by remember { mutableStateOf(0) }
+        ChoiceChips(
+            listOf(0 to "📅 งวดถัดๆ ไป", 1 to (if (st is AscendState) "🧾 ก้อนหนี้" else "🛍️ ออเดอร์"), 2 to "🕘 ประวัติจ่าย"),
+            tab, { tab = it },
+        )
+        when (tab) {
+            0 -> {
+                val rest = bills.drop(1)
+                if (rest.isEmpty()) Note("ไม่มีงวดถัดไป")
+                else Card {
+                    rest.forEachIndexed { i, b ->
+                        if (i > 0) HorizontalDivider(Modifier.padding(vertical = 4.dp), color = p.line)
+                        DueBillRow(b, showAccount = false)
+                    }
+                    Text("ประมาณการ: สมมติจ่ายตรงยอดทุกงวด · แตะงวดเพื่อดูต้น/ดอกแต่ละก้อน", fontSize = 12.sp, color = p.muted, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+            1 -> when (st) {
+                is AscendState -> AscendDetail(d, st, onEditLoan, part = 1)
+                is SplState -> SplDetail(st)
+            }
+            else -> when (st) {
+                is AscendState -> AscendDetail(d, st, onEditLoan, part = 2)
+                is SplState -> {
+                    val pays = remember(d) { d.transactions.filter { (it.type == "transfer" && it.to_account_id == acc.id) || (it.type == "income" && it.account_id == acc.id) }.sortedByDescending { it.date } }
+                    if (pays.isEmpty()) Note("ยังไม่มีการจ่าย")
+                    else Card { pays.take(30).forEach { t -> KeyValue(thaiDate(t.date), m(t.amount?.toDouble())) } }
+                }
+            }
         }
     }
 }
@@ -152,8 +166,19 @@ private fun DetailHeader(text: String) {
 }
 
 @Composable
-private fun AscendDetail(d: DanshaData, st: AscendState, onEditLoan: (String) -> Unit) {
+private fun AscendDetail(d: DanshaData, st: AscendState, onEditLoan: (String) -> Unit, part: Int) {
     val p = LocalPalette.current
+    if (part == 2) {
+        if (st.payments.isEmpty()) { Note("ยังไม่มีการจ่ายหลังวันที่เริ่มนับ"); return }
+        Card {
+            TableRow(listOf("วันที่", "จ่าย", "ดอก / ต้น"), header = true)
+            st.payments.forEach { pm ->
+                TableRow(listOf(thaiDate(pm.date), m(pm.amount), "${m(pm.interest)} / ${m(pm.principal)}"))
+                if ((pm.fee ?: 0.0) > 0) Note("  ค่าธรรมเนียม ${m(pm.fee)}")
+            }
+        }
+        return
+    }
     if (st.cycleSpend.total > 0) {
         Note("ใช้ในรอบบิล ${thaiDate(st.cycleSpend.start)} – ${thaiDate(st.cycleSpend.end)}: ${m(st.cycleSpend.total)} (ซื้อเต็ม ${m(st.cycleSpend.fullpay)} · ผ่อน/เงินสด ${m(st.cycleSpend.installment)})", p.ink)
     }
@@ -181,25 +206,6 @@ private fun AscendDetail(d: DanshaData, st: AscendState, onEditLoan: (String) ->
         }
     }
 
-    st.bills?.takeIf { it.isNotEmpty() }?.let { bills ->
-        DetailHeader("บิลล่วงหน้า")
-        Note("สมมติว่าจ่ายตรงยอดบิลทุกงวด ตั้งแต่วันนี้")
-        Card {
-            TableRow(listOf("ครบกำหนด", "ยอดบิล", "ดอก"), header = true)
-            bills.take(12).forEach { b -> TableRow(listOf(thaiDate(b.due), m(b.totalDue), m(b.interest))) }
-        }
-    }
-
-    if (st.payments.isNotEmpty()) {
-        DetailHeader("ประวัติการชำระ")
-        Card {
-            TableRow(listOf("วันที่", "จ่าย", "ดอก / ต้น"), header = true)
-            st.payments.forEach { pm ->
-                TableRow(listOf(thaiDate(pm.date), m(pm.amount), "${m(pm.interest)} / ${m(pm.principal)}"))
-                if ((pm.fee ?: 0.0) > 0) Note("  ค่าธรรมเนียม ${m(pm.fee)}")
-            }
-        }
-    }
 }
 
 @Composable
@@ -246,13 +252,6 @@ private fun LoanCard(l: LoanOut, rows: List<StatementRow>?, editable: Boolean, o
 @Composable
 private fun SplDetail(st: SplState) {
     val p = LocalPalette.current
-    if (st.bills.isNotEmpty()) {
-        DetailHeader("บิลแต่ละเดือน")
-        Card {
-            TableRow(listOf("ตัดรอบ", "ครบกำหนด", "ยอด"), header = true)
-            st.bills.forEach { b -> TableRow(listOf(shortThaiDate(b.date), thaiDate(b.due), m(b.totalDue))) }
-        }
-    }
     val byOrder = st.installments.groupBy { it.order }
     val openOrders = byOrder.filter { (_, l) -> l.any { it.left > 0.004 } }
     DetailHeader("ออเดอร์ที่ผ่อนอยู่ (${openOrders.size})")

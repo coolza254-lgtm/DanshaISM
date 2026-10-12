@@ -229,7 +229,6 @@ fun MoreScreen(d: DanshaData, vm: MainViewModel, onOpen: (Page) -> Unit) {
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         uri?.let { vm.export(it) }
     }
-    var confirmFresh by remember { mutableStateOf(false) }
 
     LazyColumn(Modifier.fillMaxSize()) {
         item {
@@ -264,9 +263,6 @@ fun MoreScreen(d: DanshaData, vm: MainViewModel, onOpen: (Page) -> Unit) {
                 MenuRow(Icons.Outlined.Download, "ส่งออกไฟล์ข้อมูล", "บันทึกเป็น ${vm.exportFileName()} ไว้สำรอง") {
                     exportLauncher.launch(vm.exportFileName())
                 }
-                MenuRow(Icons.Outlined.RestartAlt, "เริ่มใหม่", "ลบข้อมูลทั้งหมด แล้วเริ่มจากหมวดหมู่ตั้งต้น") {
-                    confirmFresh = true
-                }
                 Spacer(Modifier.height(4.dp))
                 Text(
                     "ข้อมูลสำรองอัตโนมัติไปที่บัญชี Google ของเครื่องด้วย (Android Auto Backup)",
@@ -284,24 +280,7 @@ fun MoreScreen(d: DanshaData, vm: MainViewModel, onOpen: (Page) -> Unit) {
         }
     }
 
-    if (confirmFresh) {
-        AlertDialog(
-            onDismissRequest = { confirmFresh = false },
-            title = { Text("เริ่มใหม่?") },
-            text = {
-                Text(
-                    if (d.isEmpty()) "จะสร้างหมวดหมู่และค่าตั้งต้นให้"
-                    else "ข้อมูลทั้งหมดในเครื่อง (รายการ ${d.transactions.size} รายการ) จะถูกลบ ควรส่งออกไฟล์สำรองก่อน"
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { confirmFresh = false; vm.startFresh() }) {
-                    Text("ลบและเริ่มใหม่", color = DanshaColors.Negative)
-                }
-            },
-            dismissButton = { TextButton(onClick = { confirmFresh = false }) { Text("ยกเลิก") } },
-        )
-    }
+
 }
 
 @Composable

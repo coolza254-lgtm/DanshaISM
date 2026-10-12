@@ -71,6 +71,17 @@ class QuickEntryTest {
     }
 
     @Test
+    fun smarterGuesses() {
+        // พิมพ์แค่ชื่อ → เติมยอดที่จ่ายประจำให้
+        val coffee = QuickEntry.suggest(d, "กาแฟ", today).first()
+        assertEquals(55.0, coffee.amount)
+        // พิมพ์แค่ยอด → เดาจากรายการที่เคยจ่ายยอดเท่ากัน
+        val fare = QuickEntry.suggest(d, "12", today).first()
+        assertEquals(cat("รถสาธารณะ").id, fare.subcategoryId)
+        assertEquals("acc_cash", fare.accountId)
+    }
+
+    @Test
     fun keywordsWhenNoHistory() {
         val g = QuickEntry.suggest(d, "ค่าไฟ 1888.90", today).first()
         assertEquals(cat("ค่าไฟ").id, g.subcategoryId)

@@ -129,7 +129,8 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
             .sortedWith(compareBy({ it.sort ?: Int.MAX_VALUE }, { it.name }))
     }
     val cats = remember(d) { d.categories.associateBy { it.id } }
-    val guesses = remember(d, quick) { if (quick.isBlank()) emptyList() else QuickEntry.suggest(d, quick) }
+    // ช่องว่าง = แนะนำรายการที่จดบ่อยช่วงเวลานี้, พิมพ์แล้ว = เดาจากข้อความ/ยอด
+    val guesses = remember(d, quick) { if (e != null) emptyList() else QuickEntry.suggest(d, quick) }
 
     fun applyGuess(g: QuickEntry.Guess, force: Boolean) {
         if (g.amount != null && (force || !touchedAmount)) amount = cleanAmount(amountText(g.amount), amount)
@@ -223,12 +224,9 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
                                 Icon(Icons.Outlined.AutoAwesome, null, tint = p.primary, modifier = Modifier.size(20.dp))
                                 Spacer(Modifier.width(6.dp))
                                 Text("จดไว", fontFamily = Hand, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = p.primary)
-                                Spacer(Modifier.width(8.dp))
-                                Text("พิมพ์แล้วแอพเดาหมวด/บัญชีให้", fontSize = 13.sp, color = p.muted)
                             }
                             Box(Modifier.fillMaxWidth().padding(top = 8.dp)) {
                                 val style = TextStyle(fontSize = 20.sp, color = p.ink, fontFamily = Sarabun, fontWeight = FontWeight.Medium)
-                                if (quick.isEmpty()) Text("กาแฟ 35 · ข้าว 50 สด · grab 120 tm", style = style.copy(color = p.muted.copy(alpha = 0.6f), fontWeight = FontWeight.Normal))
                                 BasicTextField(
                                     value = quick,
                                     onValueChange = { v ->
@@ -258,7 +256,9 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
                                             CategoryIcon(c?.name, c?.icon, (cats[g.categoryId] ?: c)?.color, size = 26.dp)
                                             Spacer(Modifier.width(6.dp))
                                             Text(
-                                                (c?.name ?: "") + " · " + (d.accounts.firstOrNull { it.id == g.accountId }?.name ?: ""),
+                                                (if (quick.isBlank()) g.note.ifEmpty { c?.name ?: "" } else c?.name ?: "") +
+                                                    (g.amount?.takeIf { quick.isBlank() || Forms.parseAmount(quick.filter { ch -> ch.isDigit() || ch == '.' }) == null }?.let { " ฿" + amountText(it) } ?: "") +
+                                                    " · " + (d.accounts.firstOrNull { it.id == g.accountId }?.name ?: ""),
                                                 fontSize = 13.sp, color = if (sel) p.primary else p.ink, maxLines = 1,
                                                 fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal,
                                             )
