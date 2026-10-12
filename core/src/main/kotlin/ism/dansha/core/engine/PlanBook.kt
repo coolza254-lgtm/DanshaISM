@@ -140,6 +140,41 @@ object PlanBook {
         return hit?.id ?: Forms.defaultAccount(d, "expense")
     }
 
+    // ---------- เพิ่มหลายรายการจากข้อความ ----------
+
+    /** 1 บรรทัด = หมวด | ชื่อ | ยอด | วันที่ (ไม่บังคับ) | โน้ต (ไม่บังคับ) */
+    data class BulkItem(val section: String, val name: String, val amount: Double, val day: Int?, val note: String) {
+        /** ครั้งเดียว / วางแผนใช้ = ใส่ในรอบที่เลือก, ที่เหลือ = แม่แบบทุกเดือน */
+        val oneOff: Boolean get() = section == ONCE || section == PLANNED
+    }
+
+    data class BulkLine(val line: String, val item: BulkItem?, val error: String?)
+
+    private val SECTION_WORDS = listOf(
+        listOf("เงินเดือน", "salary") to SALARY,
+        listOf("รายรับ", "income") to INCOME,
+        listOf("ประจำ", "รายจ่ายประจำ", "fixed", "บิล") to FIXED,
+        listOf("หนี้", "หนี้สิน", "debt") to DEBT,
+        listOf("ครั้งเดียว", "once") to ONCE,
+        listOf("เดินทาง", "ค่าเดินทาง", "travel") to TRAVEL,
+        listOf("วางแผน", "วางแผนใช้", "planned") to PLANNED,
+    )
+
+    fun parseBulk(text: String): List<BulkLine> = text.lines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("#") }.map { line ->
+        val f = line.split('|').map { it.trim() }
+        val sec = SECTION_WORDS.firstOrNull { (w, _) -> f[0].lowercase() in w }?.second
+        val amount = f.getOrNull(2)?.let { Forms.parseAmount(it) }
+        val day = f.getOrNull(3)?.filter(Char::isDigit)?.toIntOrNull()
+        when {
+            f.size < 3 -> BulkLine(line, null, "ต้องมีอย่างน้อย หมวด | ชื่อ | ยอด")
+            sec == null -> BulkLine(line, null, "ไม่รู้จักหมวด \"${f[0]}\"")
+            f[1].isEmpty() -> BulkLine(line, null, "ไม่มีชื่อรายการ")
+            amount == null || amount < 0 -> BulkLine(line, null, "ยอดไม่ถูกต้อง")
+            day != null && day !in 1..31 -> BulkLine(line, null, "วันที่ต้องอยู่ระหว่าง 1–31")
+            else -> BulkLine(line, BulkItem(sec, f[1], amount, day, f.drop(4).joinToString(" | ")), null)
+        }
+    }
+
     // ---------- หนี้ในแผน ----------
 
     /** ยอดบิลหนี้ที่ครบกำหนดในรอบ (ตามตัวคำนวณ) ของแต่ละบัญชีวงเงิน: accountId → (วันครบ, ยอด) */

@@ -458,7 +458,9 @@ private fun BillFields(
 fun TemplatesPage(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) {
     var editing by remember { mutableStateOf<BillTemplate?>(null) }
     var creating by remember { mutableStateOf(false) }
+    var bulk by remember { mutableStateOf(false) }
     FormPage("แม่แบบ (รายการทุกเดือน)", onClose, onSave = { creating = true }, saveLabel = "+ เพิ่ม") {
+        OutlinedButton(onClick = { bulk = true }, modifier = Modifier.fillMaxWidth()) { Text("📋 เพิ่มหลายรายการ (วางข้อความ)") }
         Note("แม่แบบ = รายการที่เกิดทุกรอบ เช่น ค่าเช่าบ้าน ค่าเน็ต เงินเดือน — แผนบิลสร้างจากที่นี่ (กดซ้ำได้ ไม่สร้างซ้ำ) · หนี้สินไม่ต้องมีแม่แบบ แอพดึงยอดให้เอง")
         val grouped = d.billTemplates.groupBy { if (it.section == PlanBook.SALARY) PlanBook.INCOME else PlanBook.sectionOf(it) }
         SECTION_LABELS.forEach { (section, label) ->
@@ -488,6 +490,54 @@ fun TemplatesPage(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) {
     }
     if (creating) TemplateEditor(d, null, vm) { creating = false }
     editing?.let { t -> TemplateEditor(d, t, vm) { editing = null } }
+    if (bulk) BulkPage(d, vm) { bulk = false }
+}
+
+/** วางข้อความหลายบรรทัด → แม่แบบ (รายการทุกเดือน) + รายการครั้งเดียวในรอบที่เลือก */
+@Composable
+private fun BulkPage(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) {
+    val p = LocalPalette.current
+    val startDay = remember(d) { Engine.startDay(Engine.config(d)) }
+    val current = remember(d) { Dates.payCycleOf(Dates.today(), startDay) }
+    val next = remember(current) { Outlook.shiftCycle(current, 1) }
+    var text by remember { mutableStateOf("") }
+    var cycle by remember { mutableStateOf(next) }
+    var generate by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val lines = remember(text) { PlanBook.parseBulk(text) }
+    val items = lines.mapNotNull { it.item }
+
+    FormPage("เพิ่มหลายรายการ", onClose, onSave = {
+        if (items.isEmpty()) { error = "ยังไม่มีรายการที่อ่านได้"; return@FormPage }
+        vm.edit<Pair<Int, Int>>(ok = "เพิ่มแล้ว ${items.size} รายการ", onError = { error = it }, onOk = { onClose() }) {
+            val res = addBulk(items, cycle)
+            if (generate) { generateCycle(cycle); syncPlan(cycle) }
+            res
+        }
+    }, saveLabel = "เพิ่ม ${items.size} รายการ", saveEnabled = items.isNotEmpty()) {
+        error?.let { Note(it, p.negative) }
+        Note("1 บรรทัดต่อ 1 รายการ:  หมวด | ชื่อ | ยอด | วันที่ | โน้ต\nหมวด: เงินเดือน · รายรับ · ประจำ · ครั้งเดียว · วางแผน · เดินทาง (วันที่กับโน้ตไม่ใส่ก็ได้)", p.ink)
+        TextInput("วางข้อความที่นี่", text, { text = it }, singleLine = false, placeholder = "ประจำ | ค่าเช่าบ้าน | 2000 | 4")
+        if (lines.isNotEmpty()) {
+            Text("ตัวอย่างที่อ่านได้", fontWeight = FontWeight.SemiBold, color = p.ink)
+            lines.forEach { l ->
+                val it = l.item
+                if (it == null) Text("✗ ${l.line} — ${l.error}", fontSize = 13.sp, color = p.negative)
+                else Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                    Text(
+                        "${SECTION_CHOICES.firstOrNull { c -> c.first == it.section }?.second ?: it.section} · ${it.name}" +
+                            (it.day?.let { dd -> " · วันที่ $dd" } ?: "") + (if (it.oneOff) " · เฉพาะรอบที่เลือก" else " · ทุกเดือน"),
+                        Modifier.weight(1f), fontSize = 14.sp, color = p.ink,
+                    )
+                    Text(formatMoney(it.amount), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = p.ink)
+                }
+            }
+        }
+        Text("รอบที่ใส่รายการครั้งเดียว / สร้างแผน", fontWeight = FontWeight.Medium, color = p.ink)
+        ChoiceChips(listOf(current to "รอบนี้ (${cycleLabel(current)})", next to "รอบหน้า (${cycleLabel(next)})"), cycle, { cycle = it })
+        SwitchRow("สร้างแผนรอบนั้นจากแม่แบบเลย", generate, { generate = it }, sub = "รายการประจำจะขึ้นในแผนบิลทันที (หนี้สินดึงยอดให้เอง)")
+        Note("วางชื่อเดิมซ้ำ = แก้ยอด/วันที่ของแม่แบบเดิม ไม่สร้างซ้ำ")
+    }
 }
 
 @Composable

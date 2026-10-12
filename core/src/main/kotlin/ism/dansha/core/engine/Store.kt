@@ -726,6 +726,45 @@ class Store private constructor(d: DanshaData) {
         return payBill(bill.id, net, accountId, "", date, note.ifEmpty { null })
     }
 
+    /**
+     * เพิ่มหลายรายการทีเดียว: รายการประจำ/รายรับ → แม่แบบ (ชื่อซ้ำ = แก้ยอด/วันที่ของแม่แบบเดิม),
+     * ครั้งเดียว/วางแผนใช้ → ใส่ในรอบ cycle — คืนจำนวน (แม่แบบ, แผนในรอบ)
+     */
+    fun addBulk(items: List<PlanBook.BulkItem>, cycle: String): Pair<Int, Int> {
+        var tpl = 0
+        var one = 0
+        val d0 = data()
+        fun categoryFor(it: PlanBook.BulkItem): String {
+            val type = if (PlanBook.groupOf(it.section) == "income") "income" else "expense"
+            if (it.section == PlanBook.SALARY) categoryByName("เงินเดือน", "income").first.takeIf { c -> c.isNotEmpty() }?.let { c -> return c }
+            val g = QuickEntry.suggest(d0, (if (type == "income") "+" else "") + it.name).firstOrNull { g -> g.type == type && g.categoryId.isNotEmpty() }
+            return g?.let { x -> x.subcategoryId.ifEmpty { x.categoryId } }.orEmpty()
+        }
+        val acc = Forms.defaultAccount(d0, "expense")
+        items.forEach { it ->
+            if (it.oneOff) {
+                createBill(
+                    Bill(
+                        id = "", pay_cycle = cycle, group = PlanBook.groupOf(it.section), section = it.section, name = it.name,
+                        est_amount = it.amount.toDec(), status = "planned", account_id = acc, category_id = categoryFor(it),
+                        due_date = Plan.dueDateInCycle(cycle, it.day, startDay()), note = it.note,
+                    )
+                )
+                one++
+            } else {
+                val old = billTemplates.firstOrNull { t -> t.name.trim().equals(it.name, ignoreCase = true) }
+                val row = (old ?: BillTemplate(id = "", active = true, account_id = acc, sort = (billTemplates.mapNotNull { t -> t.sort }.maxOrNull() ?: 0) + 1)).copy(
+                    group = PlanBook.groupOf(it.section), section = it.section, name = it.name, est_amount = it.amount.toDec(),
+                    due_day = it.day, note = it.note.ifEmpty { old?.note.orEmpty() },
+                    category_id = old?.category_id?.ifEmpty { null } ?: categoryFor(it), active = true,
+                )
+                if (old == null) createBillTemplate(row) else updateBillTemplate(row)
+                tpl++
+            }
+        }
+        return tpl to one
+    }
+
     // ---------- Myself Tax / No Discount ----------
 
     /** เปิด/ปิด + ตั้งค่า (เปิดครั้งแรก = เริ่มนับตั้งแต่วันนี้) */

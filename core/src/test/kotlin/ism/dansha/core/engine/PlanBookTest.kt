@@ -87,3 +87,32 @@ class SelfSaveTest {
         assertEquals(0.0, SelfSave.status(paid.data).totalDue)
     }
 }
+
+class BulkTest {
+    @Test
+    fun pasteTemplates() {
+        val text = """
+            ประจำ | ค่าเช่าบ้าน | 2000 | 4
+            ประจำ | ค่าไฟ | 1,888.90 | 15 | รู้ยอดบิลถัดไปวันที่ 21
+            เงินเดือน | เงินเดือน | 20000 | 15
+            ครั้งเดียว | คืนเงินแฟน | 300
+            อะไร | ผิด | 1
+        """.trimIndent()
+        val lines = PlanBook.parseBulk(text)
+        assertEquals(4, lines.count { it.item != null })
+        assertTrue(lines.last().error != null)
+        val base = Schema.seed().copy(accounts = listOf(Account("acc_bbl", "Bangkok Bank", "bank", "THB", active = true)))
+        val r = Store.run(base) { addBulk(lines.mapNotNull { it.item }, "2099-10 Oct-Nov") }
+        assertEquals(3 to 1, r.value)
+        val fire = r.data.billTemplates.single { it.name == "ค่าไฟ" }
+        assertEquals(15, fire.due_day)
+        assertEquals("รู้ยอดบิลถัดไปวันที่ 21", fire.note)
+        assertEquals(PlanBook.SALARY, r.data.billTemplates.single { it.name == "เงินเดือน" }.section)
+        assertEquals("income", r.data.billTemplates.single { it.name == "เงินเดือน" }.group)
+        assertEquals(PlanBook.ONCE, r.data.bills.single().section)
+        // วางซ้ำ = แก้ของเดิม ไม่สร้างซ้ำ
+        val again = Store.run(r.data) { addBulk(PlanBook.parseBulk("ประจำ | ค่าเช่าบ้าน | 2500 | 4").mapNotNull { it.item }, "2099-10 Oct-Nov") }
+        assertEquals(3, again.data.billTemplates.size)
+        assertEquals(2500.0, again.data.billTemplates.single { it.name == "ค่าเช่าบ้าน" }.est_amount.num())
+    }
+}
