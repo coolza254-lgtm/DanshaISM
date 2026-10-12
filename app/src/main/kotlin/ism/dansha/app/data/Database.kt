@@ -117,7 +117,7 @@ interface DanshaDao {
         BillTemplateEntity::class, DebtEntity::class, ShopeeEntity::class, PortEntity::class,
         CategoryEntity::class, FxEntity::class, PriceEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -125,7 +125,18 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun dao(): DanshaDao
 
     companion object {
+        /** v2: ส่วนลด (No Discount), Staff Claim, หมวดแผนบิล, วันกดรับของ Shopee */
+        private val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE transactions ADD COLUMN discount TEXT")
+                db.execSQL("ALTER TABLE transactions ADD COLUMN claim TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE bills ADD COLUMN section TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE billTemplates ADD COLUMN section TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE shopee ADD COLUMN received_date TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         fun open(context: Context): AppDatabase =
-            Room.databaseBuilder(context, AppDatabase::class.java, "dansha.db").build()
+            Room.databaseBuilder(context, AppDatabase::class.java, "dansha.db").addMigrations(MIGRATION_1_2).build()
     }
 }

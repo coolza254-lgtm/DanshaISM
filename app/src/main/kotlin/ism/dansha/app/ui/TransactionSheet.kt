@@ -10,11 +10,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,24 +26,26 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.Savings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,9 +57,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -73,15 +76,14 @@ import ism.dansha.core.DanshaData
 import ism.dansha.core.Dates
 import ism.dansha.core.Transaction
 import ism.dansha.core.engine.Forms
+import ism.dansha.core.engine.QuickEntry
 import ism.dansha.core.engine.toDec
-import kotlinx.coroutines.launch
 
 /**
- * เพิ่ม/แก้รายการ: แผ่นเลื่อนขึ้นจากล่าง
- * ยอดเงินพิมพ์ด้วยแป้นตัวเลขของมือถือ · หมวดเป็นไอคอน · ปุ่ม "จดลงสมุด" ติดล่างเสมอ (ลอยเหนือแป้นพิมพ์)
+ * เพิ่ม/แก้รายการ: หน้าเต็มจอ (ปัดลงไม่ปิด ปิดได้ทางปุ่ม ✕ หรือย้อนกลับ — มีข้อมูลค้างจะถามก่อนทิ้ง)
+ * รายการใหม่เริ่มที่ช่อง "จดไว": พิมพ์ "กาแฟ 35" แล้วแอพเดาหมวด/บัญชีให้จากประวัติ กด Enter = บันทึกเลย
  * existing = null → เพิ่มใหม่
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, initialType: String = "expense", onClose: () -> Unit) {
     val p = LocalPalette.current
@@ -97,38 +99,69 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
     var categoryId by remember { mutableStateOf(e?.category_id.orEmpty()) }
     var subId by remember { mutableStateOf(e?.subcategory_id.orEmpty()) }
     var note by remember { mutableStateOf(e?.note.orEmpty()) }
+    // No Discount: ราคาปกติก่อนลด
+    val hadDiscount = (e?.discount?.signum() ?: 0) > 0
+    var normalPrice by remember {
+        mutableStateOf(if (hadDiscount) amountText((if (hadCopay) e?.full_price else e?.amount)?.add(e?.discount ?: java.math.BigDecimal.ZERO)) else "")
+    }
     var error by remember { mutableStateOf<String?>(null) }
     var pickDate by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var askDiscard by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
 
-    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val scope = rememberCoroutineScope()
+    // จดไว: ช่องที่ผู้ใช้แตะเองแล้วจะไม่ถูกคำเดาทับ
+    var quick by remember { mutableStateOf("") }
+    var touchedAmount by remember { mutableStateOf(e != null) }
+    var touchedCat by remember { mutableStateOf(e != null) }
+    var touchedAcc by remember { mutableStateOf(e != null) }
+    var touchedNote by remember { mutableStateOf(e != null) }
+    var chosen by remember { mutableStateOf<QuickEntry.Guess?>(null) }
+
     val focus = LocalFocusManager.current
+    val quickFocus = remember { FocusRequester() }
     val amountFocus = remember { FocusRequester() }
-    // ปิดแบบเลื่อนลงนุ่มๆ (ไม่หายวับ)
-    fun close() {
-        scope.launch { sheet.hide() }.invokeOnCompletion { onClose() }
-    }
+    val cfg = remember(d) { ism.dansha.core.engine.Engine.config(d) }
+    val noDiscountOn = cfg["nodiscount_enabled"] == "true"
 
     val accounts = remember(d) {
         d.accounts.filter { it.active || it.id == e?.account_id || it.id == e?.to_account_id }
             .sortedWith(compareBy({ it.sort ?: Int.MAX_VALUE }, { it.name }))
     }
+    val cats = remember(d) { d.categories.associateBy { it.id } }
+    val guesses = remember(d, quick) { if (quick.isBlank()) emptyList() else QuickEntry.suggest(d, quick) }
+
+    fun applyGuess(g: QuickEntry.Guess, force: Boolean) {
+        if (g.amount != null && (force || !touchedAmount)) amount = cleanAmount(amountText(g.amount), amount)
+        if (g.type != type && g.categoryId.isNotEmpty()) type = g.type
+        if (g.categoryId.isNotEmpty() && (force || !touchedCat)) { categoryId = g.categoryId; subId = g.subcategoryId }
+        if (g.accountId.isNotEmpty() && (force || !touchedAcc)) accountId = g.accountId
+        if (force || !touchedNote) note = g.note
+        chosen = g
+    }
+
     val eligible = Forms.copayEligible(d, type, accountId, date)
     val useCopay = copay && eligible
     val value = Forms.parseAmount(amount)
     val preview = if (useCopay) Forms.copayPreview(d, type, accountId, date, value, e?.id) else null
     val typeColor = when (type) { "income" -> p.positive; "expense" -> p.negative; else -> p.primary }
+    val normal = Forms.parseAmount(normalPrice)
+    val discount = if (noDiscountOn && type == "expense" && normal != null && value != null && normal > value) normal - value else null
+
+    val dirty = if (e == null) quick.isNotBlank() || amount.isNotEmpty() || note.isNotBlank() || categoryId.isNotEmpty()
+    else amount != amountText(if (hadCopay) e.full_price else e.amount) || note != e.note || categoryId != e.category_id ||
+        subId != e.subcategory_id || accountId != e.account_id || date != e.date || type != e.type
+    fun tryClose() { if (dirty && !saving) askDiscard = true else onClose() }
 
     fun save() {
         if (saving) return
         error = null
         if (value == null || value <= 0) {
             error = "กรอกจำนวนเงินก่อน"
-            amountFocus.requestFocus()
+            if (e == null && quick.isBlank()) quickFocus.requestFocus() else amountFocus.requestFocus()
             return
         }
+        if (type == "transfer" && toAccountId.isEmpty()) { error = "เลือกบัญชีปลายทางก่อน"; return }
         val acc = d.accounts.firstOrNull { it.id == accountId }
         val amt = if (useCopay) preview?.self else value
         val row = (e ?: Transaction(id = "", source = "manual")).copy(
@@ -140,6 +173,7 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
             note = note.trim(),
             full_price = if (useCopay) value.toDec() else e?.full_price,
             gov_subsidy = e?.gov_subsidy,
+            discount = discount?.let { Math.round(it * 100) / 100.0 }?.toDec(),
         )
         // true = คำนวณสิทธิใหม่, false = ยกเลิกสิทธิของรายการนี้, null = ไม่เกี่ยว
         val copayFlag: Boolean? = when {
@@ -150,171 +184,265 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
         saving = true
         focus.clearFocus()
         vm.edit<Any>(
-            ok = if (e == null) "จดแล้ว ✓" else "แก้แล้ว ✓",
+            ok = if (discount != null) "จดแล้ว · ออม ฿${formatMoney(discount)}" else if (e == null) "จดแล้ว" else "แก้แล้ว",
             onError = { error = it; saving = false },
-            onOk = { close() },
+            onOk = { onClose() },
         ) {
             if (e == null) createTransaction(row, copayFlag) else updateTransaction(row, copayFlag)
         }
     }
 
-    // รายการใหม่: เปิดแป้นตัวเลขให้พิมพ์ยอดได้ทันที
-    LaunchedEffect(Unit) { if (e == null) amountFocus.requestFocus() }
+    // รายการใหม่: เปิดแป้นพิมพ์ที่ช่องจดไวทันที
+    LaunchedEffect(Unit) { if (e == null) quickFocus.requestFocus() }
 
-    ModalBottomSheet(
-        onDismissRequest = onClose,
-        sheetState = sheet,
-        containerColor = p.card,
-        shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
-    ) {
-        Column(Modifier.fillMaxWidth().imePadding()) {
-            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
-                // ประเภท + ลบ
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TypeSwitch(type, Modifier.weight(1f)) { t ->
-                        if (t != type) {
-                            type = t
-                            if (e == null) accountId = Forms.defaultAccount(d, t)
-                            categoryId = ""; subId = ""
-                        }
-                    }
+    Overlay(onBack = { tryClose() }) {
+        Surface(Modifier.fillMaxSize(), color = p.bg) {
+            Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
+                // หัว
+                Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { tryClose() }) { Icon(Icons.Outlined.Close, "ปิด", tint = p.ink) }
+                    Text(
+                        if (e == null) "จดรายการ" else "แก้ไขรายการ", Modifier.weight(1f),
+                        fontFamily = Hand, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = p.primary,
+                    )
                     if (e != null) IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Outlined.DeleteOutline, "ลบ", tint = p.negative) }
                 }
+                Box(Modifier.fillMaxWidth().height(1.5.dp).background(p.ink.copy(alpha = if (p.dark) 0.5f else 0.85f)))
 
-                // ยอดเงิน: เขียนบนเส้นสมุด
-                Spacer(Modifier.height(16.dp))
-                Text(if (useCopay) "ราคาเต็ม" else if (type == "income") "ได้รับ" else if (type == "transfer") "ยอดโอน" else "จ่ายไป", color = p.muted, fontSize = 14.sp)
-                Row(
-                    Modifier.fillMaxWidth().drawBehind {
-                        val y = size.height - 1.dp.toPx()
-                        drawLine(typeColor.copy(alpha = 0.6f), Offset(0f, y), Offset(size.width, y), 2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f)))
-                    }.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { amountFocus.requestFocus() },
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("฿", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = typeColor.copy(alpha = 0.75f))
-                    Spacer(Modifier.width(8.dp))
-                    Box(Modifier.weight(1f)) {
-                        val style = TextStyle(fontSize = 42.sp, fontWeight = FontWeight.Bold, color = typeColor, fontFamily = Sarabun, fontFeatureSettings = "tnum")
-                        if (amount.isEmpty()) Text("0.00", style = style.copy(color = typeColor.copy(alpha = 0.25f)))
-                        BasicTextField(
-                            value = amount,
-                            onValueChange = { amount = cleanAmount(it, amount); error = null },
-                            textStyle = style,
-                            singleLine = true,
-                            cursorBrush = SolidColor(typeColor),
-                            visualTransformation = MoneyTransformation,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
-                            keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
-                            modifier = Modifier.fillMaxWidth().focusRequester(amountFocus),
-                        )
-                    }
-                }
-                error?.let { Text(it, Modifier.padding(top = 6.dp), color = p.negative, fontSize = 14.sp, fontWeight = FontWeight.Medium) }
-
-                if (eligible) {
-                    Spacer(Modifier.height(12.dp))
-                    Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(p.stickyBlue)
-                            .border(1.5.dp, p.primary.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-                            .clickable { copay = !copay }.padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text("ใช้สิทธิ 60/40", fontWeight = FontWeight.SemiBold, color = p.ink)
-                            val pv = preview
-                            Text(
-                                if (pv != null) "รัฐจ่าย ${formatMoney(pv.gov)} · จ่ายเอง ${formatMoney(pv.self)} · วันนี้เหลือ ${formatMoney(pv.leftToday)}"
-                                else "กรอกราคาเต็ม แล้วแอพคิดส่วนที่รัฐจ่ายให้",
-                                fontSize = 13.sp, color = p.muted,
-                            )
-                        }
-                        Switch(checked = copay, onCheckedChange = { copay = it })
-                    }
-                }
-
-                // บัญชี
-                SheetLabel(if (type == "transfer") "จากบัญชี" else if (type == "income") "เข้าบัญชี" else "จ่ายจากบัญชี")
-                AccountChips(accounts, accountId) { accountId = it; if (toAccountId == it) toAccountId = "" }
-                if (type == "transfer") {
-                    SheetLabel("ไปบัญชี (จ่ายหนี้ = โอนเข้าบัญชีวงเงิน)")
-                    AccountChips(accounts.filter { it.id != accountId }, toAccountId) { toAccountId = it }
-                } else {
-                    // หมวด: ตาราง 4 ช่องเต็มความกว้าง
-                    SheetLabel("หมวด")
-                    val tree = remember(d, type, categoryId, subId) { Forms.categoryTree(d, type, keep = setOf(categoryId, subId)) }
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        tree.chunked(4).forEach { row ->
-                            Row(Modifier.fillMaxWidth()) {
-                                row.forEach { n ->
-                                    val c = n.category
-                                    val sel = c.id == categoryId
-                                    CategoryCell(c.name, c.icon, c.color, sel, Modifier.weight(1f)) {
-                                        if (sel) { categoryId = ""; subId = "" } else { categoryId = c.id; subId = "" }
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+                    // ---- จดไว ----
+                    if (e == null) {
+                        Spacer(Modifier.height(14.dp))
+                        Column(
+                            Modifier.fillMaxWidth().paperCard(p, p.card, radius = 14.dp).padding(horizontal = 14.dp, vertical = 12.dp),
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Outlined.AutoAwesome, null, tint = p.primary, modifier = Modifier.size(20.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("จดไว", fontFamily = Hand, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = p.primary)
+                                Spacer(Modifier.width(8.dp))
+                                Text("พิมพ์แล้วแอพเดาหมวด/บัญชีให้", fontSize = 13.sp, color = p.muted)
+                            }
+                            Box(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                                val style = TextStyle(fontSize = 20.sp, color = p.ink, fontFamily = Sarabun, fontWeight = FontWeight.Medium)
+                                if (quick.isEmpty()) Text("กาแฟ 35 · ข้าว 50 สด · grab 120 tm", style = style.copy(color = p.muted.copy(alpha = 0.6f), fontWeight = FontWeight.Normal))
+                                BasicTextField(
+                                    value = quick,
+                                    onValueChange = { v ->
+                                        quick = v
+                                        error = null
+                                        QuickEntry.suggest(d, v).firstOrNull()?.let { applyGuess(it, force = false) }
+                                    },
+                                    textStyle = style, singleLine = true, cursorBrush = SolidColor(p.primary),
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                    keyboardActions = KeyboardActions(onDone = { if (value != null && (type == "transfer" || categoryId.isNotEmpty())) save() else focus.clearFocus() }),
+                                    modifier = Modifier.fillMaxWidth().focusRequester(quickFocus),
+                                )
+                            }
+                            if (guesses.isNotEmpty()) {
+                                Row(Modifier.fillMaxWidth().padding(top = 10.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    guesses.filter { it.categoryId.isNotEmpty() }.forEach { g ->
+                                        val c = cats[g.subcategoryId.ifEmpty { g.categoryId }]
+                                        val sel = g.categoryId == categoryId && g.subcategoryId == subId
+                                        val shape = RoundedCornerShape(50)
+                                        Row(
+                                            Modifier.clip(shape).background(if (sel) p.primarySoft else p.surface)
+                                                .border(1.5.dp, if (sel) p.primary else Color.Transparent, shape)
+                                                .clickable { applyGuess(g, force = true); touchedCat = true; touchedAcc = true }
+                                                .padding(start = 4.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            CategoryIcon(c?.name, c?.icon, (cats[g.categoryId] ?: c)?.color, size = 26.dp)
+                                            Spacer(Modifier.width(6.dp))
+                                            Text(
+                                                (c?.name ?: "") + " · " + (d.accounts.firstOrNull { it.id == g.accountId }?.name ?: ""),
+                                                fontSize = 13.sp, color = if (sel) p.primary else p.ink, maxLines = 1,
+                                                fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal,
+                                            )
+                                        }
                                     }
                                 }
-                                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+                            }
+                            if (quick.isNotBlank() && value != null && (type == "transfer" || categoryId.isNotEmpty())) {
+                                Text("กด Enter บนแป้นพิมพ์ = บันทึกได้เลย", Modifier.padding(top = 6.dp), fontSize = 12.sp, color = p.muted)
                             }
                         }
                     }
-                    val subs = tree.firstOrNull { it.category.id == categoryId }?.children.orEmpty()
-                    if (subs.isNotEmpty()) {
-                        Spacer(Modifier.height(6.dp))
-                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            SubChip("ทั้งหมวด", null, null, null, subId.isEmpty()) { subId = "" }
-                            subs.forEach { s -> SubChip(s.name, s.name, s.icon, s.color, subId == s.id) { subId = s.id } }
+
+                    // ประเภท
+                    Spacer(Modifier.height(16.dp))
+                    TypeSwitch(type, Modifier.fillMaxWidth()) { t ->
+                        if (t != type) {
+                            type = t
+                            if (!touchedAcc) accountId = Forms.defaultAccount(d, t)
+                            categoryId = ""; subId = ""
                         }
                     }
-                }
 
-                // วันที่
-                SheetLabel("วันที่")
-                val today = Dates.todayStr()
-                val yesterday = Dates.today().minusDays(1).toString()
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SoftChip("วันนี้", date == today) { date = today }
-                    SoftChip("เมื่อวาน", date == yesterday) { date = yesterday }
-                    SoftChip(if (date != today && date != yesterday) thaiDate(date) else "เลือกวัน", date != today && date != yesterday, Icons.Outlined.CalendarMonth) { pickDate = true }
-                }
-
-                // โน้ต: บรรทัดเขียน
-                SheetLabel("โน้ต")
-                Row(
-                    Modifier.fillMaxWidth().drawBehind {
-                        val y = size.height - 1.dp.toPx()
-                        drawLine(p.line, Offset(0f, y), Offset(size.width, y), 1.5.dp.toPx())
-                    }.padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Outlined.EditNote, null, tint = p.muted)
-                    Spacer(Modifier.width(8.dp))
-                    Box(Modifier.weight(1f)) {
-                        if (note.isEmpty()) Text("เช่น ข้าวมันไก่ / ค่าไฟเดือนนี้", color = p.muted.copy(alpha = 0.7f), fontSize = 16.sp)
-                        BasicTextField(
-                            value = note, onValueChange = { note = it }, singleLine = true,
-                            textStyle = TextStyle(fontSize = 16.sp, color = p.ink, fontFamily = Sarabun),
-                            cursorBrush = SolidColor(p.primary),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                            keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
-                            modifier = Modifier.fillMaxWidth(),
-                        )
+                    // ยอดเงิน: เขียนบนเส้นสมุด
+                    Spacer(Modifier.height(14.dp))
+                    Text(if (useCopay) "ราคาเต็ม" else if (type == "income") "ได้รับ" else if (type == "transfer") "ยอดโอน" else "จ่ายไป", color = p.muted, fontSize = 14.sp)
+                    Row(
+                        Modifier.fillMaxWidth().drawBehind {
+                            val y = size.height - 1.dp.toPx()
+                            drawLine(typeColor.copy(alpha = 0.6f), Offset(0f, y), Offset(size.width, y), 2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f)))
+                        }.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { amountFocus.requestFocus() },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("฿", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = typeColor.copy(alpha = 0.75f))
+                        Spacer(Modifier.width(8.dp))
+                        Box(Modifier.weight(1f)) {
+                            val style = TextStyle(fontSize = 38.sp, fontWeight = FontWeight.Bold, color = typeColor, fontFamily = Sarabun, fontFeatureSettings = "tnum")
+                            if (amount.isEmpty()) Text("0.00", style = style.copy(color = typeColor.copy(alpha = 0.25f)))
+                            BasicTextField(
+                                value = amount,
+                                onValueChange = { amount = cleanAmount(it, amount); touchedAmount = true; error = null },
+                                textStyle = style,
+                                singleLine = true,
+                                cursorBrush = SolidColor(typeColor),
+                                visualTransformation = MoneyTransformation,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+                                keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
+                                modifier = Modifier.fillMaxWidth().focusRequester(amountFocus),
+                            )
+                        }
                     }
-                }
-                if (e?.source == "bill_plan") Note("มาจากแผนบิล: ลบแล้วแผนจะกลับเป็น \"ยังไม่จ่าย\"")
-                if (e?.source == "debt") Note("ผูกกับหนี้ย่อย (เบิกเงินสด): ลบแล้วหนี้ย่อยจะถูกลบด้วย")
-                Spacer(Modifier.height(12.dp))
-            }
+                    error?.let { Text(it, Modifier.padding(top = 6.dp), color = p.negative, fontSize = 14.sp, fontWeight = FontWeight.Medium) }
 
-            // ปุ่มบันทึกติดล่าง
-            Box(Modifier.fillMaxWidth().background(p.card).padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp)) {
-                Button(
-                    onClick = ::save, enabled = !saving,
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(2.dp, p.ink.copy(alpha = if (p.dark) 0.5f else 1f)),
-                    colors = ButtonDefaults.buttonColors(containerColor = p.primary, contentColor = p.onPrimary),
-                ) {
-                    val label = if (e == null) "จดลงสมุด" else "แก้ในสมุด"
-                    Text(if (value != null && value > 0) "$label · ฿${formatMoney(value)}" else label, fontFamily = Hand, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    if (eligible) {
+                        Spacer(Modifier.height(12.dp))
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(p.stickyBlue)
+                                .border(1.5.dp, p.primary.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                                .clickable { copay = !copay }.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text("ใช้สิทธิ 60/40", fontWeight = FontWeight.SemiBold, color = p.ink)
+                                val pv = preview
+                                Text(
+                                    if (pv != null) "รัฐจ่าย ${formatMoney(pv.gov)} · จ่ายเอง ${formatMoney(pv.self)} · วันนี้เหลือ ${formatMoney(pv.leftToday)}"
+                                    else "กรอกราคาเต็ม แล้วแอพคิดส่วนที่รัฐจ่ายให้",
+                                    fontSize = 13.sp, color = p.muted,
+                                )
+                            }
+                            Switch(checked = copay, onCheckedChange = { copay = it })
+                        }
+                    }
+
+                    // No Discount: ราคาปกติ → ส่วนต่างเข้ากระปุก
+                    if (noDiscountOn && type == "expense") {
+                        Spacer(Modifier.height(12.dp))
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(p.positiveSoft).padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Outlined.Savings, null, tint = p.positive)
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("ได้ส่วนลดไหม? ใส่ราคาปกติ", fontSize = 13.sp, color = p.ink, fontWeight = FontWeight.SemiBold)
+                                Box {
+                                    val style = TextStyle(fontSize = 18.sp, color = p.ink, fontFamily = Sarabun)
+                                    if (normalPrice.isEmpty()) Text("ราคาก่อนลด (ไม่มีก็เว้นว่าง)", style = style.copy(color = p.muted.copy(alpha = 0.7f), fontSize = 15.sp))
+                                    BasicTextField(
+                                        value = normalPrice, onValueChange = { normalPrice = cleanAmount(it, normalPrice) }, textStyle = style, singleLine = true,
+                                        cursorBrush = SolidColor(p.positive), visualTransformation = MoneyTransformation,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+                                        keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                }
+                            }
+                            if (discount != null) Text("ออม ฿${formatMoney(discount)}", color = p.positive, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        }
+                    }
+
+                    // บัญชี
+                    SheetLabel(if (type == "transfer") "จากบัญชี" else if (type == "income") "เข้าบัญชี" else "จ่ายจากบัญชี")
+                    AccountChips(accounts, accountId) { accountId = it; touchedAcc = true; if (toAccountId == it) toAccountId = "" }
+                    if (type == "transfer") {
+                        SheetLabel("ไปบัญชี (จ่ายหนี้ = โอนเข้าบัญชีวงเงิน)")
+                        AccountChips(accounts.filter { it.id != accountId }, toAccountId) { toAccountId = it }
+                    } else {
+                        // หมวด: ตาราง 4 ช่องเต็มความกว้าง
+                        SheetLabel("หมวด")
+                        val tree = remember(d, type, categoryId, subId) { Forms.categoryTree(d, type, keep = setOf(categoryId, subId)) }
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            tree.chunked(4).forEach { row ->
+                                Row(Modifier.fillMaxWidth()) {
+                                    row.forEach { n ->
+                                        val c = n.category
+                                        val sel = c.id == categoryId
+                                        CategoryCell(c.name, c.icon, c.color, sel, Modifier.weight(1f)) {
+                                            touchedCat = true
+                                            if (sel) { categoryId = ""; subId = "" } else { categoryId = c.id; subId = "" }
+                                        }
+                                    }
+                                    repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+                                }
+                            }
+                        }
+                        val subs = tree.firstOrNull { it.category.id == categoryId }?.children.orEmpty()
+                        if (subs.isNotEmpty()) {
+                            Spacer(Modifier.height(6.dp))
+                            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                SubChip("ทั้งหมวด", null, null, null, subId.isEmpty()) { subId = ""; touchedCat = true }
+                                subs.forEach { s -> SubChip(s.name, s.name, s.icon, s.color, subId == s.id) { subId = s.id; touchedCat = true } }
+                            }
+                        }
+                    }
+
+                    // วันที่
+                    SheetLabel("วันที่")
+                    val today = Dates.todayStr()
+                    val yesterday = Dates.today().minusDays(1).toString()
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SoftChip("วันนี้", date == today) { date = today }
+                        SoftChip("เมื่อวาน", date == yesterday) { date = yesterday }
+                        SoftChip(if (date != today && date != yesterday) thaiDate(date) else "เลือกวัน", date != today && date != yesterday, Icons.Outlined.CalendarMonth) { pickDate = true }
+                    }
+
+                    // โน้ต: บรรทัดเขียน
+                    SheetLabel("โน้ต")
+                    Row(
+                        Modifier.fillMaxWidth().drawBehind {
+                            val y = size.height - 1.dp.toPx()
+                            drawLine(p.line, Offset(0f, y), Offset(size.width, y), 1.5.dp.toPx())
+                        }.padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Outlined.EditNote, null, tint = p.muted)
+                        Spacer(Modifier.width(8.dp))
+                        Box(Modifier.weight(1f)) {
+                            if (note.isEmpty()) Text("เช่น ข้าวมันไก่ / ค่าไฟเดือนนี้", color = p.muted.copy(alpha = 0.7f), fontSize = 16.sp)
+                            BasicTextField(
+                                value = note, onValueChange = { note = it; touchedNote = true }, singleLine = true,
+                                textStyle = TextStyle(fontSize = 16.sp, color = p.ink, fontFamily = Sarabun),
+                                cursorBrush = SolidColor(p.primary),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                    if (e?.source == "bill_plan") Note("มาจากแผนบิล: ลบแล้วแผนจะกลับเป็น \"ยังไม่จ่าย\"")
+                    if (e?.source == "debt") Note("ผูกกับหนี้ย่อย (เบิกเงินสด): ลบแล้วหนี้ย่อยจะถูกลบด้วย")
+                    if (e != null && e.claim.isNotEmpty()) Note("รายการนี้อยู่ใน Staff Claim (${claimLabel(e.claim)})")
+                    Spacer(Modifier.height(16.dp))
+                }
+
+                // ปุ่มบันทึกติดล่าง
+                Box(Modifier.fillMaxWidth().background(p.bg).padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)) {
+                    Button(
+                        onClick = ::save, enabled = !saving,
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(2.dp, p.ink.copy(alpha = if (p.dark) 0.5f else 1f)),
+                        colors = ButtonDefaults.buttonColors(containerColor = p.primary, contentColor = p.onPrimary),
+                    ) {
+                        val label = if (e == null) "จดลงสมุด" else "แก้ในสมุด"
+                        Text(if (value != null && value > 0) "$label · ฿${formatMoney(value)}" else label, fontFamily = Hand, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -323,9 +451,26 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
     if (pickDate) DatePickerPopup(date, { date = it }, { pickDate = false })
     if (confirmDelete && e != null) {
         ConfirmDialog("ลบรายการนี้?", "ลบแล้วกู้คืนไม่ได้", "ลบ", {
-            vm.edit<Unit>(ok = "ลบแล้ว", onError = { error = it }, onOk = { close() }) { deleteTransaction(e.id) }
+            vm.edit<Unit>(ok = "ลบแล้ว", onError = { error = it }, onOk = { onClose() }) { deleteTransaction(e.id) }
         }, { confirmDelete = false })
     }
+    if (askDiscard) {
+        AlertDialog(
+            onDismissRequest = { askDiscard = false },
+            title = { Text("ทิ้งรายการที่กรอกไว้?") },
+            text = { Text("ยังไม่ได้บันทึก ถ้าปิดตอนนี้ต้องกรอกใหม่") },
+            confirmButton = { TextButton(onClick = { askDiscard = false; onClose() }) { Text("ทิ้ง", color = p.negative) } },
+            dismissButton = { TextButton(onClick = { askDiscard = false }) { Text("กรอกต่อ") } },
+        )
+    }
+}
+
+/** สถานะ Staff Claim เป็นภาษาคน */
+fun claimLabel(claim: String): String = when {
+    claim == "open" -> "ยังไม่ได้ส่งเบิก"
+    claim.startsWith("sub:") -> "ส่งเบิกแล้ว ${thaiDate(claim.removePrefix("sub:"))}"
+    claim.startsWith("paid:") -> "ได้เงินคืนแล้ว ${thaiDate(claim.removePrefix("paid:"))}"
+    else -> claim
 }
 
 @Composable

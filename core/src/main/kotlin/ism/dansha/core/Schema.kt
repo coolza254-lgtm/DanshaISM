@@ -20,12 +20,12 @@ object Schema {
     val NUMERIC = setOf(
         "opening_balance", "credit_limit", "sort", "amount", "est_amount", "actual_amount", "principal", "tenor",
         "annual_rate", "installment", "price", "qty", "fx_rate", "fee", "tax", "due_day", "auto_rate", "manual_rate",
-        "rate_to_thb", "full_price", "gov_subsidy", "tenor_min", "tenor_max", "snap_remaining", "snap_paid_periods",
+        "rate_to_thb", "full_price", "gov_subsidy", "discount", "tenor_min", "tenor_max", "snap_remaining", "snap_paid_periods",
     )
     val BOOLEAN = setOf("active")
     val DATE_COLS = setOf(
         "date", "txn_date", "first_due_date", "order_date", "due_date", "paid_date", "debt_since",
-        "snap_date", "snap_last_interest_date",
+        "snap_date", "snap_last_interest_date", "received_date",
     )
 
     val CURRENCIES = listOf("THB", "USD", "JPY", "CNY")

@@ -55,6 +55,10 @@ data class Transaction(
     val created_at: String = "",
     val full_price: Dec? = null,
     val gov_subsidy: Dec? = null,
+    /** No Discount: ส่วนลดที่ได้ (ราคาก่อนลด − ที่จ่ายจริง) → เก็บเข้ากระปุก (แอพ Android) */
+    val discount: Dec? = null,
+    /** Staff Claim (ค่า Grab ที่เบิกบริษัทได้): "" | open | sub:yyyy-MM-dd | paid:yyyy-MM-dd */
+    val claim: String = "",
 )
 
 @Suppress("PropertyName")
@@ -78,6 +82,8 @@ data class Bill(
     val note: String = "",
     val to_account_id: String = "",
     val sort: Int? = null,
+    /** หมวดในหน้าแผนบิล: salary | fixed | debt | once | travel | planned | claim ("" = ดูจาก group) */
+    val section: String = "",
 )
 
 @Suppress("PropertyName")
@@ -94,6 +100,8 @@ data class BillTemplate(
     val sort: Int? = null,
     val note: String = "",
     val to_account_id: String = "",
+    /** หมวดในหน้าแผนบิล (เหมือน Bill.section) */
+    val section: String = "",
 )
 
 @Suppress("PropertyName")
@@ -141,6 +149,8 @@ data class ShopeeOrder(
     val category_id: String = "",
     val txn_id: String = "",
     val order_no: String = "",
+    /** วันที่กดรับสินค้า (SPayLater นับรอบบิลจากวันนี้) "" = ยังไม่กดรับ */
+    val received_date: String = "",
 )
 
 @Suppress("PropertyName")

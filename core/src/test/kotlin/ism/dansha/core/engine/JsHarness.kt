@@ -31,12 +31,16 @@ import java.util.concurrent.TimeUnit
 
 /** เทียบ JSON สองก้อนแบบละเอียด: ตัวเลขต้องเท่ากันทุกบิต, key ที่ไม่มี = null */
 object JsCompare {
+    private val ANDROID_ONLY = setOf("discount", "claim", "section", "received_date")
+
     fun diff(expected: JsonElement?, actual: JsonElement?, path: String = "$", out: MutableList<String> = ArrayList(), limit: Int = 30): List<String> {
         if (out.size >= limit) return out
         val e = expected ?: JsonNull
         val a = actual ?: JsonNull
         when {
-            e is JsonObject && a is JsonObject -> (e.keys + a.keys).forEach { k -> diff(e[k], a[k], "$path.$k", out, limit) }
+            // คอลัมน์ที่แอพ Android เพิ่มเอง (ระบบเดิมไม่มี) ไม่ต้องเทียบ
+            e is JsonObject && a is JsonObject -> (e.keys + a.keys).filter { it in e.keys || it !in ANDROID_ONLY }
+                .forEach { k -> diff(e[k], a[k], "$path.$k", out, limit) }
             e is JsonArray && a is JsonArray -> {
                 if (e.size != a.size) out += "$path: จำนวนแถว JS=${e.size} Kotlin=${a.size}"
                 for (i in 0 until minOf(e.size, a.size)) diff(e[i], a[i], "$path[$i]", out, limit)
