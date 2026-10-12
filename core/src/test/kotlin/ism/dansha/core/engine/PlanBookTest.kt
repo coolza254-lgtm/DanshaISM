@@ -61,3 +61,29 @@ class PlanBookTest {
         assertEquals(15234.5, r.data.transactions.single { it.type == "income" }.amount.num())
     }
 }
+
+class SelfSaveTest {
+    @Test
+    fun taxAndDiscountJar() {
+        val seed = Schema.seed()
+        val food = seed.categories.first { it.name == "อาหาร" }
+        val salaryCat = seed.categories.first { it.name == "เงินเดือน" }
+        val base = seed.copy(
+            accounts = listOf(
+                Account("acc_cash", "เงินสด", "cash", "THB", opening_balance = BigDecimal(1000), active = true),
+                Account("acc_dime", "Dime!", "bank", "THB", active = true),
+            ),
+        )
+        val today = ism.dansha.core.Dates.todayStr()
+        val r = Store.run(base) {
+            setSelfSave(true, true, 1.0, mapOf(food.id to 10.0), "acc_dime")
+            createTransaction(ism.dansha.core.Transaction("", today, type = "expense", account_id = "acc_cash", amount = BigDecimal(25), category_id = food.id, discount = BigDecimal(10)))
+            createTransaction(ism.dansha.core.Transaction("", today, type = "income", account_id = "acc_cash", amount = BigDecimal(15000), category_id = salaryCat.id))
+        }
+        val st = SelfSave.status(r.data)
+        assertEquals(2.5 + 150.0, st.taxDue) // อาหาร 10% ของ 25 + รายรับ 1% ของ 15000
+        assertEquals(10.0, st.discountDue)
+        val paid = Store.run(r.data) { paySelfSave(st.taxDue, st.discountDue, "acc_cash", "acc_dime") }
+        assertEquals(0.0, SelfSave.status(paid.data).totalDue)
+    }
+}

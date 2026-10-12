@@ -726,6 +726,44 @@ class Store private constructor(d: DanshaData) {
         return payBill(bill.id, net, accountId, "", date, note.ifEmpty { null })
     }
 
+    // ---------- Myself Tax / No Discount ----------
+
+    /** เปิด/ปิด + ตั้งค่า (เปิดครั้งแรก = เริ่มนับตั้งแต่วันนี้) */
+    fun setSelfSave(taxOn: Boolean, discountOn: Boolean, incomePct: Double?, rates: Map<String, Double?>, targetAccountId: String) {
+        val now = SelfSave.settings(cfg())
+        if (taxOn && !now.taxOn) config["mytax_start"] = today()
+        if (discountOn && !now.discountOn) config["nodiscount_start"] = today()
+        config["mytax_enabled"] = taxOn.toString()
+        config["nodiscount_enabled"] = discountOn.toString()
+        if (incomePct != null) config["mytax_income_pct"] = incomePct.toString().removeSuffix(".0")
+        rates.forEach { (cat, pct) ->
+            if (pct == null || pct == 0.0) config.remove("mytax_rate:$cat") else config["mytax_rate:$cat"] = pct.toString().removeSuffix(".0")
+        }
+        config["savings_account_id"] = targetAccountId
+    }
+
+    /** โอนเข้ากระปุก (บัญชีลงทุน) แล้ว: รายการโอนแยกภาษีตัวเอง / ส่วนลด */
+    fun paySelfSave(taxAmount: Double, discountAmount: Double, fromAccountId: String, toAccountId: String, date: String? = null): List<Transaction> {
+        if (toAccountId.isEmpty()) fail("เลือกบัญชีลงทุนที่จะโอนเข้าก่อน (ตั้งค่าในหน้ากระปุก)")
+        if (fromAccountId == toAccountId) fail("บัญชีต้นทางกับปลายทางต้องไม่ใช่บัญชีเดียวกัน")
+        val day = date?.ifEmpty { null } ?: today()
+        val from = accounts.firstOrNull { it.id == fromAccountId } ?: fail("กรุณาเลือกบัญชีที่โอนออก")
+        val out = ArrayList<Transaction>()
+        fun one(amount: Double, kind: String, note: String) {
+            if (amount <= 0) return
+            out += createTransaction(
+                Transaction(
+                    id = "", date = day, type = "transfer", account_id = from.id, to_account_id = toAccountId,
+                    amount = round2(amount).toDec(), currency = from.currency, note = note, source = kind,
+                )
+            )
+        }
+        one(taxAmount, SelfSave.TAX, "Myself Tax")
+        one(discountAmount, SelfSave.DISCOUNT, "No Discount")
+        if (out.isEmpty()) fail("ไม่มียอดที่ต้องโอน")
+        return out
+    }
+
     fun setConfig(values: Map<String, String>) {
         config.putAll(values)
     }

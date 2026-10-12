@@ -162,6 +162,7 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
 
         // ไปทำงานวันนี้: กดจดค่ารถ 8/12/20 หรือ Grab (เฉพาะวันที่ติ๊กไว้ในแผนบิล)
         item(key = "travel_today") { TravelTodayCard(d, vm) }
+        item(key = "self_save") { SelfSaveCard(d, vm) }
 
         // เงินที่มี / หนี้ (บรรทัดในสมุด)
         item {

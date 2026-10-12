@@ -69,7 +69,7 @@ enum class Tab(val label: String, val icon: ImageVector) {
 }
 
 /** หน้าที่เปิดซ้อนบนแท็บ */
-enum class Page { More, Accounts, Templates, Shopee, Port, Settings }
+enum class Page { More, Accounts, Templates, Shopee, Port, Settings, Savings }
 
 @Composable
 fun DanshaRoot(vm: MainViewModel) {
@@ -185,6 +185,7 @@ fun DanshaRoot(vm: MainViewModel) {
                             Page.Shopee -> ShopeePage(data, computed, vm, ::back)
                             Page.Port -> PortPage(data, vm, ::back)
                             Page.Settings -> SettingsPage(data, vm, ::back)
+                            Page.Savings -> SelfSavePage(data, vm, ::back)
                         }
                     }
                 }
