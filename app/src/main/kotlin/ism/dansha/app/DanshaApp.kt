@@ -10,6 +10,7 @@ class DanshaApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        CrashLog.install(this)
         repository = Repository(AppDatabase.open(this))
         ism.dansha.app.notify.Notifier.setup(this)
         Shortcuts.setup(this)

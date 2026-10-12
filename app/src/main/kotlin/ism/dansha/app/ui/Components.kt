@@ -49,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -288,9 +289,17 @@ fun WrapRow(modifier: Modifier = Modifier, gap: androidx.compose.ui.unit.Dp = 8.
 /** ตัวเลขใหญ่ที่ย่อขนาดเองให้พอดีบรรทัดเดียว (ยอดเงินยาวๆ ไม่ล้นจอ) */
 @Composable
 fun FitText(text: String, style: androidx.compose.ui.text.TextStyle, modifier: Modifier = Modifier, minSize: androidx.compose.ui.unit.TextUnit = 16.sp) {
-    androidx.compose.foundation.text.BasicText(
-        text, modifier, style = style, maxLines = 1, softWrap = false,
-        autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = minSize, maxFontSize = style.fontSize),
+    // ย่อทีละ 8% จนพอดีความกว้าง (วาดเมื่อพอดีแล้ว จะได้ไม่เห็นตัวใหญ่แวบ)
+    var size by remember(text, style.fontSize) { mutableStateOf(style.fontSize.value) }
+    var ready by remember(text, style.fontSize) { mutableStateOf(false) }
+    Text(
+        text,
+        modifier.drawWithContent { if (ready) drawContent() },
+        style = style.copy(fontSize = size.sp, lineHeight = (size * 1.18f).sp),
+        maxLines = 1, softWrap = false,
+        onTextLayout = { r ->
+            if (r.didOverflowWidth && size > minSize.value) size = maxOf(minSize.value, size * 0.92f) else ready = true
+        },
     )
 }
 

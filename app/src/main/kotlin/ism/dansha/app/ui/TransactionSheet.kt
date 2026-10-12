@@ -158,7 +158,7 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
         error = null
         if (value == null || value <= 0) {
             error = "กรอกจำนวนเงินก่อน"
-            if (e == null && quick.isBlank()) quickFocus.requestFocus() else amountFocus.requestFocus()
+            runCatching { if (e == null && quick.isBlank()) quickFocus.requestFocus() else amountFocus.requestFocus() }
             return
         }
         if (type == "transfer" && toAccountId.isEmpty()) { error = "เลือกบัญชีปลายทางก่อน"; return }
@@ -193,7 +193,10 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
     }
 
     // รายการใหม่: เปิดแป้นพิมพ์ที่ช่องจดไวทันที
-    LaunchedEffect(Unit) { if (e == null) quickFocus.requestFocus() }
+    LaunchedEffect(Unit) {
+        // หน้านี้วาดใน OverlayHost (เฟรมถัดไป) — รอให้ช่องพร้อมก่อนค่อยโฟกัส
+        if (e == null) repeat(10) { androidx.compose.runtime.withFrameNanos { }; if (runCatching { quickFocus.requestFocus() }.isSuccess) return@LaunchedEffect }
+    }
 
     Overlay(onBack = { tryClose() }) {
         Surface(Modifier.fillMaxSize(), color = p.bg) {
@@ -286,7 +289,7 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
                         Modifier.fillMaxWidth().drawBehind {
                             val y = size.height - 1.dp.toPx()
                             drawLine(typeColor.copy(alpha = 0.6f), Offset(0f, y), Offset(size.width, y), 2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f)))
-                        }.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { amountFocus.requestFocus() },
+                        }.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { runCatching { amountFocus.requestFocus() } },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text("฿", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = typeColor.copy(alpha = 0.75f))

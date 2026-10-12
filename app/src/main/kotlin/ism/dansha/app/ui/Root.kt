@@ -219,6 +219,23 @@ fun DanshaRoot(vm: MainViewModel) {
         )
     }
 
+    // แอพเด้งครั้งก่อน → ให้ส่งรายละเอียดให้ผู้พัฒนาได้
+    var crash by remember { mutableStateOf(ism.dansha.app.CrashLog.read(context)) }
+    crash?.let { text ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { ism.dansha.app.CrashLog.clear(context); crash = null },
+            title = { Text("ขอโทษครับ แอพเด้งไปเมื่อกี้") },
+            text = { Text("กด \"ส่งรายละเอียด\" แล้วส่งข้อความนี้ให้ผู้พัฒนา จะได้แก้ได้ตรงจุด (มีแค่ข้อความ error ไม่มีข้อมูลการเงิน)") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    shareText(context, text)
+                    ism.dansha.app.CrashLog.clear(context); crash = null
+                }) { Text("ส่งรายละเอียด") }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { ism.dansha.app.CrashLog.clear(context); crash = null }) { Text("ปิด") } },
+        )
+    }
+
     UpdateDialog(update, vm)
     pending?.let { ImportConfirmDialog(it, data, vm) }
 }

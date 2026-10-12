@@ -103,7 +103,7 @@ fun TransactionsScreen(d: DanshaData, vm: MainViewModel, header: @Composable () 
                     DayHeader(thaiDate(date), (if (net.signum() < 0) "−" else if (net.signum() > 0) "+" else "") + formatMoney(net.abs()))
                 }
                 items(list, key = { it.id }, contentType = { "txn" }) { t ->
-                    Box(Modifier.animateItem()) { TransactionRow(t, accounts, categories) { editing = t } }
+                    TransactionRow(t, accounts, categories) { editing = t }
                 }
             }
             item { Spacer(Modifier.height(24.dp)) }
