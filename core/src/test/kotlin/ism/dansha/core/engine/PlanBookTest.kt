@@ -1,0 +1,63 @@
+package ism.dansha.core.engine
+
+import ism.dansha.core.Account
+import ism.dansha.core.Schema
+import java.math.BigDecimal
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+class PlanBookTest {
+    private val base = Schema.seed().copy(
+        accounts = listOf(
+            Account("acc_cash", "เงินสด", "cash", "THB", opening_balance = BigDecimal(1000), active = true, sort = 1),
+            Account("acc_tm", "TrueMoney Wallet", "bank", "THB", opening_balance = BigDecimal(1000), active = true, sort = 2),
+            Account("acc_bbl", "Bangkok Bank", "bank", "THB", opening_balance = BigDecimal(5000), active = true, sort = 3),
+        ),
+    )
+    private val cycle = "2099-10 Oct-Nov"
+
+    @Test
+    fun claimPayDay() {
+        assertEquals("2026-10-30", PlanBook.claimPayDate("2026-10-15")) // ส่งทันวันที่ 15 → 30 เดือนนี้
+        assertEquals("2026-11-30", PlanBook.claimPayDate("2026-10-16")) // ไม่ทัน → เดือนหน้า
+        assertEquals("2027-02-28", PlanBook.claimPayDate("2027-01-20")) // ก.พ. ไม่มีวันที่ 30
+    }
+
+    @Test
+    fun grabClaimFlow() {
+        val r = Store.run(base) {
+            val g1 = logGrab("2026-10-03", 140.0)
+            val g2 = logGrab("2026-10-08", 160.0)
+            val bill = submitClaim(listOf(g1.id, g2.id), "2026-10-10")
+            Triple(g1, bill, receiveClaim(bill.id, 300.0, "2026-10-30"))
+        }
+        val (g1, bill, paid) = r.value
+        assertEquals("acc_tm", g1.account_id) // จ่าย Grab ด้วย TrueMoney
+        assertEquals("2026-10-30", bill.due_date)
+        assertEquals(300.0, bill.est_amount.num())
+        assertEquals("acc_bbl", bill.account_id) // รับเงินเบิกเข้า Bangkok Bank
+        assertEquals("paid", paid.status)
+        assertTrue(r.data.transactions.filter { it.source == "travel" }.all { it.claim == "paid:2026-10-30" })
+    }
+
+    @Test
+    fun travelFromWorkDays() {
+        val r = Store.run(base) {
+            setConfig(mapOf("travel_go" to "12", "travel_back" to "8", "travel_grab" to "150"))
+            setWorkDays(cycle, listOf(PlanBook.WorkDay("2099-10-16", false), PlanBook.WorkDay("2099-10-17", true)))
+        }
+        val row = r.data.bills.single { it.template_id == PlanBook.AUTO_TRAVEL }
+        assertEquals(12.0 + 8.0 + 12.0 + 150.0, row.est_amount.num())
+        assertEquals("B", row.group)
+        assertEquals(PlanBook.TRAVEL, PlanBook.sectionOf(row))
+    }
+
+    @Test
+    fun salaryFromSlip() {
+        val r = Store.run(base) { receiveSalary(cycle, 15234.5, "acc_bbl", "2099-10-15", "Slip 14/10") }
+        assertEquals("paid", r.value.status)
+        assertEquals(PlanBook.SALARY, r.value.section)
+        assertEquals(15234.5, r.data.transactions.single { it.type == "income" }.amount.num())
+    }
+}

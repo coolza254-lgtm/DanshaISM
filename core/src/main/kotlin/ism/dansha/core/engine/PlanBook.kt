@@ -1,0 +1,157 @@
+package ism.dansha.core.engine
+
+import ism.dansha.core.Account
+import ism.dansha.core.Bill
+import ism.dansha.core.BillTemplate
+import ism.dansha.core.DanshaData
+import ism.dansha.core.Dates
+import ism.dansha.core.Transaction
+import java.time.LocalDate
+
+/*
+ * แผนบิลแบบแบ่งหมวด (แอพ Android)
+ *  รายรับ (เงินเดือน / Staff Claim / อื่นๆ) · รายจ่ายประจำ · หนี้สิน (ดึงยอดอัตโนมัติ) · ครั้งเดียว · ค่าเดินทาง · เงินที่วางแผนใช้
+ * group เดิม (income / A / B) ยังใช้คำนวณยอดคงเหลือเหมือนระบบเดิม: section บอกแค่ว่าแสดงอยู่หมวดไหน
+ */
+object PlanBook {
+    const val INCOME = "income"
+    const val SALARY = "salary"
+    const val CLAIM = "claim"
+    const val FIXED = "fixed"
+    const val DEBT = "debt"
+    const val ONCE = "once"
+    const val TRAVEL = "travel"
+    const val PLANNED = "planned"
+
+    /** หมวดตามลำดับที่แสดง */
+    val SECTIONS = listOf(INCOME, FIXED, DEBT, ONCE, TRAVEL, PLANNED)
+
+    /** หมวดที่เลือกได้ตอนเพิ่ม/แก้แผน (ไม่รวมหมวดที่แอพจัดการเอง) */
+    val EDITABLE = listOf(SALARY, INCOME, FIXED, DEBT, ONCE, TRAVEL, PLANNED)
+
+    /** template_id ของแถวที่แอพสร้าง/อัปเดตเอง */
+    const val AUTO_DEBT = "auto:debt"
+    const val AUTO_TRAVEL = "auto:travel"
+    const val CLAIM_PREFIX = "claim:"
+
+    /** group (ใช้คำนวณ) ของแต่ละหมวด */
+    fun groupOf(section: String): String = when (section) {
+        INCOME, SALARY, CLAIM -> "income"
+        TRAVEL, PLANNED -> "B"
+        else -> "A"
+    }
+
+    /** หมวดที่แสดงของแถว (แถวเก่าที่ยังไม่มี section เดาจาก group/ข้อมูลอื่น) */
+    fun sectionOf(b: Bill): String = displaySection(b.section, b.group, b.to_account_id, b.template_id)
+
+    fun sectionOf(t: BillTemplate): String = displaySection(t.section, t.group, t.to_account_id, t.id)
+
+    private fun displaySection(section: String, group: String, toAccount: String, templateId: String): String = when {
+        section == SALARY || section == CLAIM -> INCOME
+        section.isNotEmpty() -> section
+        group == "income" -> INCOME
+        toAccount.isNotEmpty() -> DEBT
+        group == "B" -> PLANNED
+        templateId.isNotEmpty() -> FIXED
+        else -> ONCE
+    }
+
+    // ---------- วันทำงาน / ค่าเดินทาง ----------
+
+    /** วันทำงานของรอบ: key ใน config = "work:<yyyy-MM ของรอบ>", ค่า = "2026-10-16,2026-10-17*,…" (* = กะ 14:00–23:00 กลับ Grab) */
+    fun workKey(cycle: String) = "work:" + cycle.take(7)
+
+    data class WorkDay(val date: String, val late: Boolean)
+
+    fun workDays(config: Map<String, String>, cycle: String): List<WorkDay> =
+        config[workKey(cycle)].orEmpty().split(',').map { it.trim() }.filter { it.length >= 10 }
+            .map { WorkDay(it.take(10), it.endsWith("*")) }.distinctBy { it.date }.sortedBy { it.date }
+
+    fun encodeWorkDays(days: List<WorkDay>): String =
+        days.sortedBy { it.date }.joinToString(",") { it.date + if (it.late) "*" else "" }
+
+    data class TravelFares(val go: Double, val back: Double, val grab: Double)
+
+    fun fares(config: Map<String, String>): TravelFares = TravelFares(
+        go = config["travel_go"]?.toDoubleOrNull() ?: 12.0,
+        back = config["travel_back"]?.toDoubleOrNull() ?: 12.0,
+        grab = config["travel_grab"]?.toDoubleOrNull() ?: 150.0,
+    )
+
+    data class TravelPlan(
+        val days: Int,
+        val lateDays: Int,
+        /** วันทำงานที่ยังไม่ถึง (รวมวันนี้) */
+        val daysLeft: Int,
+        val lateLeft: Int,
+        /** ประมาณค่าเดินทางทั้งรอบ */
+        val total: Double,
+        /** ประมาณที่ยังต้องจ่าย (วันนี้เป็นต้นไป) */
+        val remaining: Double,
+        /** จดค่าเดินทางจริงในรอบนี้แล้ว */
+        val spent: Double,
+    )
+
+    /** ค่าเดินทาง: วันปกติ = ไป + กลับ (เงินสด), วันกะดึก = ไป (เงินสด) + Grab กลับ */
+    fun travel(d: DanshaData, cycle: String, today: String = Dates.todayStr()): TravelPlan {
+        val cfg = Engine.config(d)
+        val f = fares(cfg)
+        val days = workDays(cfg, cycle)
+        fun cost(w: WorkDay) = if (w.late) f.go + f.grab else f.go + f.back
+        val left = days.filter { it.date >= today }
+        val (rs, re) = Dates.payCycleRange(cycle, Engine.startDay(cfg))
+        val spent = d.transactions.filter { isTravelTxn(it) && it.date >= rs.toString() && it.date <= re.toString() }.sumOf { it.amount.num() }
+        return TravelPlan(
+            days = days.size, lateDays = days.count { it.late }, daysLeft = left.size, lateLeft = left.count { it.late },
+            total = round2(days.sumOf(::cost)), remaining = round2(left.sumOf(::cost)), spent = round2(spent),
+        )
+    }
+
+    /** รายการค่าเดินทางไปทำงาน (จดจากปุ่มค่ารถ หรือ Grab ที่เบิกได้) */
+    fun isTravelTxn(t: Transaction): Boolean =
+        t.type == "expense" && (t.source == "travel" || t.claim.isNotEmpty())
+
+    // ---------- Staff Claim ----------
+
+    /**
+     * วันได้เงินเบิกคืน: ส่งใบเบิกภายในวันที่ 15 → ได้วันที่ 30 เดือนนั้น, หลังวันที่ 15 → วันที่ 30 เดือนถัดไป
+     * เดือนที่ไม่มีวันที่ 30 (ก.พ.) ใช้วันสุดท้ายของเดือน
+     */
+    fun claimPayDate(submitted: String): String {
+        val s = LocalDate.parse(submitted.take(10))
+        val month = if (s.dayOfMonth <= 15) s.withDayOfMonth(1) else s.withDayOfMonth(1).plusMonths(1)
+        return month.withDayOfMonth(minOf(30, month.lengthOfMonth())).toString()
+    }
+
+    fun openClaims(d: DanshaData): List<Transaction> = d.transactions.filter { it.claim == "open" }.sortedBy { it.date }
+
+    /** บัญชีที่จ่าย Grab (TrueMoney) / รับเงินเบิก (Bangkok Bank): ตั้งเองได้ ไม่ตั้ง = เดาจากชื่อ */
+    fun claimPayAccount(d: DanshaData): String = pickAccount(d, Engine.config(d)["claim_pay_account_id"], listOf("true"))
+
+    fun claimReceiveAccount(d: DanshaData): String = pickAccount(d, Engine.config(d)["claim_account_id"], listOf("bangkok", "bbl", "กรุงเทพ"))
+
+    fun cashAccount(d: DanshaData): String = pickAccount(d, Engine.config(d)["travel_account_id"], emptyList(), cash = true)
+
+    private fun pickAccount(d: DanshaData, configured: String?, names: List<String>, cash: Boolean = false): String {
+        val active = d.accounts.filter { it.active }
+        configured?.takeIf { id -> active.any { it.id == id } }?.let { return it }
+        val hit: Account? = if (cash) active.firstOrNull { it.type == "cash" }
+        else active.firstOrNull { a -> names.any { a.name.lowercase().contains(it) || a.icon.lowercase().contains(it) } }
+        return hit?.id ?: Forms.defaultAccount(d, "expense")
+    }
+
+    // ---------- หนี้ในแผน ----------
+
+    /** ยอดบิลหนี้ที่ครบกำหนดในรอบ (ตามตัวคำนวณ) ของแต่ละบัญชีวงเงิน: accountId → (วันครบ, ยอด) */
+    fun debtDues(d: DanshaData, cycle: String, states: Map<String, DebtState>): Map<String, Pair<String, Double>> {
+        val (rs, re) = Dates.payCycleRange(cycle, Engine.startDay(Engine.config(d)))
+        val out = LinkedHashMap<String, Pair<String, Double>>()
+        d.accounts.filter { it.active && (isEngineAccount(it) || isSplAccount(it)) }.forEach { a ->
+            val st = states[a.id] ?: return@forEach
+            val cur = st.currentBill
+            val list = (if (cur != null) listOf(cur.due to cur.amount) else emptyList()) + (st.bills ?: emptyList()).map { it.due to it.totalDue }
+            list.firstOrNull { it.first >= rs.toString() && it.first <= re.toString() }?.let { out[a.id] = it }
+        }
+        return out
+    }
+}

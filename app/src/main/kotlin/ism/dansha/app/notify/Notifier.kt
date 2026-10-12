@@ -88,6 +88,11 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             }
             prefs.edit().putString(if (job == Notify.Job.Summary) "summary" else "remind", today).apply()
         }
+        // วันที่ 14: Slip เงินเดือนออก → เตือนให้กรอก (วันละครั้ง ตั้งแต่ 9 โมง)
+        if (now.dayOfMonth == 14 && now.hour >= 9 && prefs.getString("slip", "") != today) {
+            Notifier.show(applicationContext, 3, false, NotifyMessage("🧾 Slip เงินเดือนออกแล้ว", "เปิดแผนบิล → รายรับ → กรอกเงินเดือนจาก Slip ไว้ก่อนเงินเข้าวันที่ 15"))
+            prefs.edit().putString("slip", today).apply()
+        }
         return Result.success()
     }
 }

@@ -207,7 +207,8 @@ class Store private constructor(d: DanshaData) {
         if (!(est.num() >= 0)) fail("ยอดประมาณไม่ถูกต้อง")
     }
 
-    private fun validateBill(b0: Bill, isNew: Boolean): Bill {
+    private fun validateBill(b1: Bill, isNew: Boolean): Bill {
+        val b0 = if (b1.section.isNotEmpty()) b1.copy(group = PlanBook.groupOf(b1.section)) else b1
         validateBillCommon(b0.group, b0.name, b0.est_amount)
         var b = b0.copy(due_date = date(b0.due_date), paid_date = date(b0.paid_date))
         if (b.group == "income") b = b.copy(to_account_id = "")
@@ -237,7 +238,8 @@ class Store private constructor(d: DanshaData) {
         bills.removeOne(id) { it.id }
     }
 
-    private fun validateTemplate(t: BillTemplate): BillTemplate {
+    private fun validateTemplate(t1: BillTemplate): BillTemplate {
+        val t = if (t1.section.isNotEmpty()) t1.copy(group = PlanBook.groupOf(t1.section)) else t1
         validateBillCommon(t.group, t.name, t.est_amount)
         return if (t.group == "income") t.copy(to_account_id = "") else t
     }
@@ -287,7 +289,7 @@ class Store private constructor(d: DanshaData) {
                     id = Ids.newId("bill"), pay_cycle = cycle, group = t0.group, name = t0.name,
                     category_id = t0.category_id, account_id = t0.account_id, to_account_id = t0.to_account_id,
                     est_amount = est, status = "planned", due_date = Plan.dueDateInCycle(cycle, dueDay, startDay),
-                    template_id = t0.id, note = t0.note, sort = t0.sort,
+                    template_id = t0.id, note = t0.note, sort = t0.sort, section = t0.section,
                 )
                 bills += row
                 created += row
@@ -564,6 +566,164 @@ class Store private constructor(d: DanshaData) {
             val row = fx[i].copy(auto_rate = rate.toDec())
             fx[i] = row.copy(rate_to_thb = Balances.fxRateOf(row).toDec(), updated_note = "auto " + (date?.ifEmpty { null } ?: today()))
         }
+    }
+
+    // ---------- แผนบิลแบบแบ่งหมวด (แอพ Android) ----------
+
+    /**
+     * อัปเดตแถวที่แอพดูแลเองในรอบนี้: ค่างวดหนี้ (ยอดจากตัวคำนวณ) + ค่าเดินทาง (จากวันทำงานที่ติ๊กไว้)
+     * คืน true ถ้ามีอะไรเปลี่ยน
+     */
+    fun syncPlan(cycle: String): Boolean {
+        if (!Regex("^\\d{4}-\\d{2} ").containsMatchIn(cycle)) return false
+        var changed = false
+
+        // หนี้สิน
+        val dues = PlanBook.debtDues(data(), cycle, Engine.debtStates(data(), today(), true))
+        val payFrom = accounts.filter { it.active && it.type != "revolving_credit" }.sortedWith(compareBy({ if (it.type == "bank") 0 else 1 }, { it.sort ?: Int.MAX_VALUE })).firstOrNull()?.id.orEmpty()
+        accounts.filter { it.active && (isEngineAccount(it) || isSplAccount(it)) }.forEach { a ->
+            val due = dues[a.id]
+            val rows = bills.filter { it.pay_cycle == cycle && it.to_account_id == a.id }
+            if (rows.isEmpty()) {
+                if (due != null && due.second > 0) {
+                    bills += Bill(
+                        id = Ids.newId("bill"), pay_cycle = cycle, group = "A", section = PlanBook.DEBT, name = a.name,
+                        account_id = payFrom, to_account_id = a.id, est_amount = due.second.toDec(), status = "planned",
+                        due_date = due.first, template_id = PlanBook.AUTO_DEBT, sort = a.sort,
+                    )
+                    changed = true
+                }
+                return@forEach
+            }
+            bills.replaceAll { b ->
+                if (b.pay_cycle != cycle || b.to_account_id != a.id || b.status == "paid") return@replaceAll b
+                val amt = due?.second ?: 0.0
+                val dd = due?.first ?: b.due_date
+                if (b.est_amount.num() != amt || b.due_date != dd || b.section.isEmpty()) {
+                    changed = true
+                    b.copy(est_amount = amt.toDec(), due_date = dd, section = PlanBook.DEBT)
+                } else b
+            }
+        }
+
+        // ค่าเดินทาง: ยอดที่ยังต้องจ่าย (วันทำงานตั้งแต่วันนี้) — ที่จ่ายไปแล้วอยู่ในเงินที่มีอยู่แล้ว
+        val tp = PlanBook.travel(data(), cycle, today())
+        val row = bills.firstOrNull { it.pay_cycle == cycle && it.template_id == PlanBook.AUTO_TRAVEL }
+        val note = "ทำงาน ${tp.days} วัน (กะดึก ${tp.lateDays}) · เหลือ ${tp.daysLeft} วัน"
+        if (row == null) {
+            if (tp.days > 0) {
+                bills += Bill(
+                    id = Ids.newId("bill"), pay_cycle = cycle, group = "B", section = PlanBook.TRAVEL, name = "ค่าเดินทางไปทำงาน",
+                    account_id = PlanBook.cashAccount(data()), est_amount = tp.remaining.toDec(), status = "planned",
+                    template_id = PlanBook.AUTO_TRAVEL, note = note, sort = 0,
+                )
+                changed = true
+            }
+        } else if (row.status != "paid" && (row.est_amount.num() != tp.remaining || row.note != note)) {
+            bills.replaceWhere(row.id, { it.id }, row.copy(est_amount = tp.remaining.toDec(), note = note))
+            changed = true
+        }
+        return changed
+    }
+
+    /** ตั้งวันทำงานของรอบ แล้วคิดค่าเดินทางใหม่ */
+    fun setWorkDays(cycle: String, days: List<PlanBook.WorkDay>) {
+        val k = PlanBook.workKey(cycle)
+        if (days.isEmpty()) config.remove(k) else config[k] = PlanBook.encodeWorkDays(days)
+        syncPlan(cycle)
+    }
+
+    /** หมวด (หลัก, ย่อย) จากชื่อหมวดย่อย/หลัก ไม่เจอ = ว่าง */
+    private fun categoryByName(name: String, type: String = "expense"): Pair<String, String> {
+        val c = categories.firstOrNull { it.active && it.type == type && it.name.equals(name, ignoreCase = true) } ?: return "" to ""
+        return if (c.parent_id.isEmpty()) c.id to "" else c.parent_id to c.id
+    }
+
+    /** จดค่ารถไปทำงาน (เงินสด): leg = go | back */
+    fun logTravel(date: String, leg: String, amount: Double, accountId: String? = null): Transaction {
+        if (!(amount > 0)) fail("ยอดต้องมากกว่า 0")
+        val acc = accountId?.ifEmpty { null } ?: PlanBook.cashAccount(data())
+        val (main, sub) = categoryByName("รถสาธารณะ").let { if (it.first.isEmpty()) categoryByName("เดินทาง") else it }
+        return createTransaction(
+            Transaction(
+                id = "", date = date, type = "expense", account_id = acc, amount = amount.toDec(),
+                currency = accounts.firstOrNull { it.id == acc }?.currency ?: "THB",
+                category_id = main, subcategory_id = sub, note = if (leg == "go") "ค่ารถไปทำงาน" else "ค่ารถกลับบ้าน", source = "travel",
+            )
+        )
+    }
+
+    /** จด Grab กลับบ้าน (เบิก Staff Claim ได้) */
+    fun logGrab(date: String, amount: Double, accountId: String? = null, note: String = ""): Transaction {
+        if (!(amount > 0)) fail("ยอดต้องมากกว่า 0")
+        val acc = accountId?.ifEmpty { null } ?: PlanBook.claimPayAccount(data())
+        val (main, sub) = categoryByName("แท็กซี่/Grab").let { if (it.first.isEmpty()) categoryByName("เดินทาง") else it }
+        return createTransaction(
+            Transaction(
+                id = "", date = date, type = "expense", account_id = acc, amount = amount.toDec(),
+                currency = accounts.firstOrNull { it.id == acc }?.currency ?: "THB",
+                category_id = main, subcategory_id = sub, note = note.ifEmpty { "Grab กลับบ้าน (เบิกได้)" }, source = "travel", claim = "open",
+            )
+        )
+    }
+
+    /** ตั้ง/ยกเลิกว่ารายการนี้เบิก Staff Claim ได้ */
+    fun setClaimable(txnId: String, claimable: Boolean) {
+        val t = transactions.firstOrNull { it.id == txnId } ?: fail("ไม่พบรายการ")
+        if (t.claim.startsWith("sub:") || t.claim.startsWith("paid:")) fail("รายการนี้ส่งเบิกไปแล้ว")
+        transactions.replaceWhere(txnId, { it.id }, t.copy(claim = if (claimable) "open" else ""))
+    }
+
+    /** ส่งใบเบิก: รายการที่เลือก → รอเงินคืน + สร้างรายรับในแผนตามวันได้เงิน (ส่งภายใน 15 → 30 เดือนนี้ ไม่งั้น 30 เดือนหน้า) */
+    fun submitClaim(txnIds: List<String>, submitted: String): Bill {
+        val day = date(submitted.ifEmpty { today() })
+        val rows = transactions.filter { it.id in txnIds && it.claim == "open" }
+        if (rows.isEmpty()) fail("ยังไม่ได้เลือกรายการที่จะเบิก")
+        val total = round2(rows.sumOf { it.amount.num() })
+        transactions.replaceAll { if (it.id in txnIds && it.claim == "open") it.copy(claim = "sub:$day") else it }
+        val payDay = PlanBook.claimPayDate(day)
+        val cycle = Dates.payCycleOf(payDay, startDay())
+        val tid = PlanBook.CLAIM_PREFIX + day
+        val existing = bills.firstOrNull { it.template_id == tid && it.status != "paid" }
+        val note = "Grab ${transactions.count { it.claim == "sub:$day" }} เที่ยว · ส่งเบิก ${day}"
+        if (existing != null) {
+            val row = existing.copy(est_amount = (existing.est_amount.num() + total).toDec(), note = note)
+            bills.replaceWhere(existing.id, { it.id }, row)
+            return row
+        }
+        val (main, sub) = categoryByName("รายรับอื่นๆ", "income")
+        val row = Bill(
+            id = Ids.newId("bill"), pay_cycle = cycle, group = "income", section = PlanBook.CLAIM, name = "Staff Claim (เบิกค่า Grab)",
+            account_id = PlanBook.claimReceiveAccount(data()), category_id = sub.ifEmpty { main }, est_amount = total.toDec(),
+            status = "planned", due_date = payDay, template_id = tid, note = note,
+        )
+        bills += row
+        return row
+    }
+
+    /** ได้เงินเบิกคืนแล้ว: บันทึกรายรับ + ปิดรายการ Grab ที่อยู่ในใบเบิกนั้น */
+    fun receiveClaim(billId: String, amount: Double, date: String? = null, accountId: String? = null): Bill {
+        val bill = bills.firstOrNull { it.id == billId } ?: fail("ไม่พบรายการในแผน")
+        val paid = payBill(billId, amount, accountId, "", date, null)
+        val submitted = bill.template_id.removePrefix(PlanBook.CLAIM_PREFIX)
+        transactions.replaceAll { if (it.claim == "sub:$submitted") it.copy(claim = "paid:${paid.paid_date}") else it }
+        return paid
+    }
+
+    /** รับเงินเดือน (จาก Slip): ใช้แผนเงินเดือนของรอบ ไม่มีก็สร้างให้ แล้วบันทึกรับเงิน */
+    fun receiveSalary(cycle: String, net: Double, accountId: String, date: String, note: String = ""): Bill {
+        if (!(net > 0)) fail("ยอดสุทธิต้องมากกว่า 0")
+        var bill = bills.firstOrNull { it.pay_cycle == cycle && it.status != "paid" && it.group == "income" && (it.section == PlanBook.SALARY || it.name.contains("เงินเดือน")) }
+        if (bill == null) {
+            val (main, _) = categoryByName("เงินเดือน", "income")
+            bill = createBill(
+                Bill(
+                    id = "", pay_cycle = cycle, group = "income", section = PlanBook.SALARY, name = "เงินเดือน", category_id = main,
+                    account_id = accountId, est_amount = net.toDec(), status = "planned", due_date = date,
+                )
+            )
+        }
+        return payBill(bill.id, net, accountId, "", date, note.ifEmpty { null })
     }
 
     fun setConfig(values: Map<String, String>) {
