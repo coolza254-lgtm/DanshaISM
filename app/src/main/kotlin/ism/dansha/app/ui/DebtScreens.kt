@@ -63,6 +63,8 @@ private sealed interface DebtAction {
 @Composable
 fun DebtScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel) {
     var action by remember { mutableStateOf<DebtAction?>(null) }
+    // หน้ารายละเอียดของบัญชี (เปิดค้างไว้ได้ระหว่างจ่าย/แก้ไข)
+    var detail by remember { mutableStateOf<String?>(null) }
     LazyColumn(Modifier.fillMaxSize()) {
         item { ScreenTitle("หนี้") }
         if (c == null) {
@@ -92,9 +94,25 @@ fun DebtScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel) {
         val accounts = d.accounts.associateBy { it.id }
         states.values.forEach { st ->
             val acc = accounts[st.accountId] ?: return@forEach
-            item(key = st.accountId) { DebtAccountCard(d, acc, st) { action = it } }
+            item(key = st.accountId) { DebtAccountCard(d, acc, st, onOpen = { detail = acc.id }) { action = it } }
         }
         item { Spacer(Modifier.height(24.dp)) }
+    }
+
+    detail?.let { id ->
+        val acc = d.accounts.firstOrNull { it.id == id }
+        val st = c?.debts?.get(id)
+        if (acc != null && st != null) {
+            DebtDetailPage(
+                d, acc, st,
+                onPay = { action = DebtAction.Pay(id) },
+                onQuote = { action = DebtAction.Quote(id) },
+                onDraw = { action = DebtAction.Draw(id) },
+                onAddLoan = { action = DebtAction.EditDebt(id, null) },
+                onEditLoan = { debtId -> action = DebtAction.EditDebt(id, debtId) },
+                onClose = { detail = null },
+            )
+        } else androidx.compose.runtime.LaunchedEffect(Unit) { detail = null }
     }
 
     val close = { action = null }
@@ -108,10 +126,15 @@ fun DebtScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel) {
 }
 
 @Composable
-private fun DebtAccountCard(d: DanshaData, acc: Account, st: DebtState, onAction: (DebtAction) -> Unit) {
+private fun DebtAccountCard(d: DanshaData, acc: Account, st: DebtState, onOpen: () -> Unit, onAction: (DebtAction) -> Unit) {
     var open by remember { mutableStateOf(false) }
-    Card {
-        Text(acc.name, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
+    Card(Modifier.clickable(onClick = onOpen)) {
+        androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            AccountBadge(acc, 30)
+            Spacer(Modifier.width(10.dp))
+            Text(acc.name, Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
+            Text("ดูทั้งหมด ›", color = DanshaColors.Primary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        }
         Spacer(Modifier.height(4.dp))
         KeyValue("ใช้ไป / วงเงิน", "${money(st.outstanding)} / ${formatMoney(acc.credit_limit)}", bold = true)
         if (st is AscendState) {
