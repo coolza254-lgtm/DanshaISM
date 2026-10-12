@@ -158,10 +158,11 @@ object DebtTracker {
         orders: List<ShopeeOrder>,
         today: String,
         withSchedule: Boolean,
+        receiveDays: Int = SPayLater.DEFAULT_RECEIVE_DAYS,
     ): Map<String, DebtState> {
         val res = LinkedHashMap<String, DebtState>()
         accounts.filter(::isEngineAccount).forEach { a -> res[a.id] = accountState(a, debts, txns, today, withSchedule) }
-        accounts.filter(::isSplAccount).forEach { a -> res[a.id] = SPayLater.state(a, orders, txns, today) }
+        accounts.filter(::isSplAccount).forEach { a -> res[a.id] = SPayLater.state(a, orders, txns, today, receiveDays) }
         return res
     }
 

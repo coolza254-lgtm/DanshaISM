@@ -35,6 +35,7 @@ import ism.dansha.core.engine.Forms
 import ism.dansha.core.engine.PurchaseCheck
 import ism.dansha.core.engine.PurchaseQuery
 import ism.dansha.core.engine.SplState
+import ism.dansha.core.engine.SPayLater
 import ism.dansha.core.engine.isSplAccount
 import ism.dansha.core.engine.toDec
 import java.math.BigDecimal
@@ -49,6 +50,7 @@ fun ShopeePage(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onC
     val spl = c?.debts?.values?.filterIsInstance<SplState>().orEmpty()
     val perOrder = spl.flatMap { it.perOrder.entries }.associate { it.key to it.value }
     val stats = remember(d) { Engine.shopeeStats(d) }
+    val receiveDays = remember(d) { Engine.receiveDays(Engine.config(d)) }
 
     FormPage("Shopee", onClose, onSave = null) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -80,10 +82,24 @@ fun ShopeePage(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onC
                         o.shop.ifEmpty { null },
                         if (o.pay_method == "spaylater") "SPayLater ${o.tenor ?: 1} งวด" + (o.installment?.let { " × ${formatMoney(it)}" } ?: "") else "จ่ายเต็ม",
                         if (o.status == "cancelled") "ยกเลิก" else null,
+                        if (o.pay_method == "spaylater" && o.received_date.isNotEmpty()) "รับของ ${thaiDate(o.received_date)}" else null,
                         po?.let { if (it.left > 0) "เหลือ ${money(it.left)} งวดถัดไป ${it.next?.let(::thaiDate) ?: "-"}" else "ผ่อนครบแล้ว" },
                     ).joinToString(" · "),
                     color = DanshaColors.Muted, fontSize = 13.sp,
                 )
+                if (o.status == SPayLater.WAITING) {
+                    Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Pill("📦 รอรับของ · คาดว่ารับ ${thaiDate(SPayLater.basisDate(o, receiveDays))}", LocalPalette.current.warningSoft, LocalPalette.current.ink)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "ได้รับแล้ววันนี้ ›",
+                            Modifier.clickable {
+                                vm.edit<ShopeeOrder>(ok = "บันทึกวันรับของแล้ว") { updateShopee(o.copy(status = "active", received_date = Dates.todayStr())) }
+                            }.padding(vertical = 4.dp),
+                            color = DanshaColors.Primary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
+                        )
+                    }
+                }
             }
             HorizontalDivider(color = DanshaColors.Line)
         }
@@ -125,7 +141,10 @@ private fun PurchaseForm(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) 
     var orderNo by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var received by remember { mutableStateOf(false) }
+    var receivedDate by remember { mutableStateOf(Dates.todayStr()) }
     val spl = isSplAccount(d.accounts.firstOrNull { it.id == accountId })
+    val receiveDays = remember(d) { Engine.receiveDays(Engine.config(d)) }
 
     fun save() {
         vm.edit<Any>(ok = "บันทึกออเดอร์แล้ว", onError = { error = it }, onOk = { onClose() }) {
@@ -133,6 +152,7 @@ private fun PurchaseForm(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) 
                 item = item.trim(), price = Forms.parseAmount(price) ?: 0.0, accountId = accountId, date = date,
                 tenor = tenor.toIntOrNull(), installment = Forms.parseAmount(installment), shop = shop,
                 categoryId = categoryId, subcategoryId = subId, note = note, orderNo = orderNo,
+                receivedDate = if (received) receivedDate else "",
             )
         }
     }
@@ -146,7 +166,7 @@ private fun PurchaseForm(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) 
         if (spl) {
             AmountField("จำนวนงวด", tenor, { tenor = it.filter(Char::isDigit) })
             if ((tenor.toIntOrNull() ?: 1) > 1) AmountField("ค่างวด (ดูจากแอพ Shopee)", installment, { installment = it }, supporting = "ต้องกรอก ถ้าผ่อนมากกว่า 1 งวด")
-            Note("รอบบิลเดือน M = สั่ง 15/M – 14/M+1 → งวดแรกครบกำหนดวันที่ 25 ของเดือนถัดไป")
+            ReceiveFields(received, { received = it }, receivedDate, { receivedDate = it }, date, receiveDays)
         } else {
             Note("จ่ายเต็ม: จะสร้างรายจ่าย \"Shopee: …\" ให้อัตโนมัติ")
             val tree = Forms.categoryTree(d, "expense", keep = setOf(categoryId, subId))
@@ -169,6 +189,9 @@ private fun OrderEditor(d: DanshaData, o: ShopeeOrder, vm: MainViewModel, onClos
     var installment by remember { mutableStateOf(amountText(o.installment)) }
     var date by remember { mutableStateOf(o.order_date) }
     var cancelled by remember { mutableStateOf(o.status == "cancelled") }
+    var received by remember { mutableStateOf(o.status != SPayLater.WAITING) }
+    var receivedDate by remember { mutableStateOf(o.received_date.ifEmpty { if (o.status == SPayLater.WAITING) Dates.todayStr() else "" }) }
+    val receiveDays = remember(d) { Engine.receiveDays(Engine.config(d)) }
     var note by remember { mutableStateOf(o.note) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -177,7 +200,13 @@ private fun OrderEditor(d: DanshaData, o: ShopeeOrder, vm: MainViewModel, onClos
             item = item, shop = shop, price = Forms.parseAmount(price)?.toDec(), order_date = date, note = note,
             tenor = if (o.pay_method == "spaylater") tenor.toIntOrNull() ?: 1 else o.tenor,
             installment = if (o.pay_method == "spaylater") Forms.parseAmount(installment)?.toDec() else o.installment,
-            status = if (cancelled) "cancelled" else if (o.status == "cancelled") "active" else o.status,
+            status = when {
+                cancelled -> "cancelled"
+                o.pay_method == "spaylater" && !received -> SPayLater.WAITING
+                o.status == "cancelled" || o.status == SPayLater.WAITING -> "active"
+                else -> o.status
+            },
+            received_date = if (o.pay_method == "spaylater" && received) receivedDate else "",
         )
         vm.edit<ShopeeOrder>(ok = "บันทึกแล้ว", onError = { error = it }, onOk = { onClose() }) { updateShopee(row) }
     }
@@ -190,6 +219,7 @@ private fun OrderEditor(d: DanshaData, o: ShopeeOrder, vm: MainViewModel, onClos
         if (o.pay_method == "spaylater") {
             AmountField("จำนวนงวด", tenor, { tenor = it.filter(Char::isDigit) })
             AmountField("ค่างวด", installment, { installment = it })
+            ReceiveFields(received, { received = it; if (it && receivedDate.isEmpty()) receivedDate = Dates.todayStr() }, receivedDate, { receivedDate = it }, date, receiveDays, allowLegacy = o.received_date.isEmpty() && o.status != SPayLater.WAITING)
         }
         DateField("วันที่สั่ง", date, { date = it })
         SwitchRow("ยกเลิก/คืนเงินแล้ว", cancelled, { cancelled = it }, sub = if (o.txn_id.isNotEmpty()) "จ่ายเต็ม: ยกเลิกแล้วรายจ่ายที่ผูกไว้จะถูกลบ" else "ไม่นับในยอดค้าง SPayLater")
@@ -198,6 +228,25 @@ private fun OrderEditor(d: DanshaData, o: ShopeeOrder, vm: MainViewModel, onClos
             vm.edit<Unit>(ok = "ลบแล้ว", onError = { error = it }, onOk = { onClose() }) { deleteShopee(o.id) }
         }
     }
+}
+
+/** กดรับของแล้วหรือยัง + วันที่กดรับ (SPayLater ตัดรอบทุกวันที่ 15 นับจากวันกดรับ) */
+@Composable
+private fun ReceiveFields(
+    received: Boolean, onReceived: (Boolean) -> Unit,
+    date: String, onDate: (String) -> Unit,
+    orderDate: String, receiveDays: Int, allowLegacy: Boolean = false,
+) {
+    Text("กดรับสินค้าแล้วหรือยัง?", fontWeight = FontWeight.Medium)
+    ChoiceChips(listOf(false to "📦 ยังไม่ได้รับ", true to "✅ รับแล้ว"), received, onReceived)
+    if (received) {
+        DateField("วันที่กดรับสินค้า", date, onDate, allowEmpty = allowLegacy)
+        if (allowLegacy && date.isEmpty()) Note("ออเดอร์เก่า: ไม่ระบุวันรับ = นับรอบบิลจากวันสั่งแบบเดิม")
+    } else {
+        val est = runCatching { java.time.LocalDate.parse(orderDate).plusDays(receiveDays.toLong()).toString() }.getOrDefault(orderDate)
+        Note("คาดว่าจะรับ (หรือระบบกดรับให้) ประมาณ ${thaiDate(est)} — ได้ของแล้วมากด \"ได้รับแล้ว\" ในรายการ")
+    }
+    Note("ตัดรอบทุกวันที่ 15: กดรับ 1–14 → จ่าย 25 เดือนนี้ · กดรับตั้งแต่ 15 → จ่าย 25 เดือนหน้า")
 }
 
 // ---------- เช็คก่อนซื้อ ----------

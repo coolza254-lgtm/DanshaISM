@@ -31,7 +31,7 @@ import java.util.concurrent.TimeUnit
 
 /** เทียบ JSON สองก้อนแบบละเอียด: ตัวเลขต้องเท่ากันทุกบิต, key ที่ไม่มี = null */
 object JsCompare {
-    private val ANDROID_ONLY = setOf("discount", "claim", "section", "received_date")
+    private val ANDROID_ONLY = setOf("discount", "claim", "section", "received_date", "shopee_receive_days")
 
     fun diff(expected: JsonElement?, actual: JsonElement?, path: String = "$", out: MutableList<String> = ArrayList(), limit: Int = 30): List<String> {
         if (out.size >= limit) return out

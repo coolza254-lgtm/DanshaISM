@@ -56,10 +56,24 @@ object SPayLater {
         return LocalDate.of(d.year, 1, 25).plusMonths((billMonth + k).toLong()).toString()
     }
 
+    /**
+     * วันที่ใช้นับรอบบิลของออเดอร์ = วันกดรับสินค้า (ตัดรอบทุกวันที่ 15: รับ 1–14 → บิลเดือนนี้, รับ 15 ขึ้นไป → เดือนถัดไป)
+     * ยังไม่กดรับ (status = waiting) → คาดว่ารับ = วันสั่ง + receiveDays วัน
+     * ออเดอร์เก่าที่ไม่มีวันรับ → ใช้วันสั่ง (แบบระบบเดิม)
+     */
+    fun basisDate(o: ShopeeOrder, receiveDays: Int = DEFAULT_RECEIVE_DAYS): String = when {
+        o.received_date.isNotEmpty() -> o.received_date
+        o.status == WAITING && o.order_date.length >= 10 -> LocalDate.parse(o.order_date.substring(0, 10)).plusDays(receiveDays.toLong()).toString()
+        else -> o.order_date
+    }
+
+    const val WAITING = "waiting"
+    const val DEFAULT_RECEIVE_DAYS = 7
+
     /** วันตัดรอบของบิลที่ครบกำหนด due (วันที่ 15 ของเดือนเดียวกับ due) */
     fun stmtDate(due: String): String = due.substring(0, 8) + "15"
 
-    fun installments(orders: List<ShopeeOrder>): List<SplInstallment> {
+    fun installments(orders: List<ShopeeOrder>, receiveDays: Int = DEFAULT_RECEIVE_DAYS): List<SplInstallment> {
         val list = ArrayList<SplInstallment>()
         orders.forEach { o ->
             val n = max(1, (o.tenor ?: 0).let { if (it == 0) 1 else it })
@@ -69,20 +83,20 @@ object SPayLater {
             for (k in 1..n) {
                 // งวดสุดท้ายปรับเศษให้รวมเท่ากับยอดผ่อนทั้งหมด (กรณีไม่ได้กรอกค่างวด)
                 val amt = if (noInstallment && k == n) round2(price - inst * (n - 1)) else inst
-                list += SplInstallment(o.id, o.item, k, n, dueDate(o.order_date, k), amt)
+                list += SplInstallment(o.id, o.item, k, n, dueDate(basisDate(o, receiveDays), k), amt)
             }
         }
         return list.sortedWith(compareBy<SplInstallment> { it.due }.thenBy { it.order })
     }
 
-    fun state(account: Account, orders: List<ShopeeOrder>, txns: List<Transaction>, today: String): SplState {
+    fun state(account: Account, orders: List<ShopeeOrder>, txns: List<Transaction>, today: String, receiveDays: Int = DEFAULT_RECEIVE_DAYS): SplState {
         val mine = orders.filter { it.account_id == account.id && it.pay_method == "spaylater" && it.status != "cancelled" }
         val since = account.debt_since.ifEmpty { "0000-00-00" }
         var paid = round2(
             txns.filter { t -> t.date >= since && ((t.type == "transfer" && t.to_account_id == account.id) || (t.type == "income" && t.account_id == account.id)) }
                 .fold(0.0) { a, t -> a + t.amount.num() }
         )
-        val inst = installments(mine).map { i ->
+        val inst = installments(mine, receiveDays).map { i ->
             val x = min(paid, i.amount)
             val out = i.copy(paid = round2(x), left = round2(i.amount - x))
             paid = round2(paid - x)

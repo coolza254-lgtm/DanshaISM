@@ -93,3 +93,19 @@ class QuickEntryTest {
         assertTrue(QuickEntry.suggest(d, "", today).size <= 3)
     }
 }
+
+class SplReceiveTest {
+    private fun o(order: String, received: String = "", status: String = "ordered") =
+        ism.dansha.core.ShopeeOrder("o", order_date = order, received_date = received, status = status, price = BigDecimal(100), tenor = 1, pay_method = "spaylater")
+
+    @Test
+    fun billFollowsReceiveDate() {
+        // สั่ง 10 ต.ค. รับ 14 ต.ค. → บิล 25 ต.ค. / รับ 15 ต.ค. → เลื่อนไป 25 พ.ย.
+        assertEquals("2026-10-25", SPayLater.installments(listOf(o("2026-10-10", "2026-10-14"))).first().due)
+        assertEquals("2026-11-25", SPayLater.installments(listOf(o("2026-10-10", "2026-10-15"))).first().due)
+        // ยังไม่กดรับ: คาดว่ารับ สั่ง + 7 วัน = 17 ต.ค. → 25 พ.ย.
+        assertEquals("2026-11-25", SPayLater.installments(listOf(o("2026-10-10", status = "waiting"))).first().due)
+        // ออเดอร์เก่าไม่มีวันรับ: ใช้วันสั่งเหมือนเดิม
+        assertEquals("2026-10-25", SPayLater.installments(listOf(o("2026-10-10"))).first().due)
+    }
+}

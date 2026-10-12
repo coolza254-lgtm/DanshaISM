@@ -34,9 +34,12 @@ object Engine {
 
     fun config(d: DanshaData): Map<String, String> = Schema.effectiveConfig(d.config)
 
+    /** Shopee: ยังไม่กดรับของ → คาดว่ารับภายในกี่วันหลังสั่ง */
+    fun receiveDays(config: Map<String, String>): Int = config["shopee_receive_days"]?.trim()?.toIntOrNull()?.coerceIn(0, 60) ?: SPayLater.DEFAULT_RECEIVE_DAYS
+
     /** สถานะหนี้ทุกบัญชีวงเงินที่มีตัวคำนวณ */
     fun debtStates(d: DanshaData, today: String = Dates.todayStr(), withSchedule: Boolean = false): Map<String, DebtState> =
-        DebtTracker.states(d.accounts, d.transactions, d.debts, d.shopee, today, withSchedule)
+        DebtTracker.states(d.accounts, d.transactions, d.debts, d.shopee, today, withSchedule, receiveDays(config(d)))
 
     fun accounts(d: DanshaData, debt: Map<String, DebtState>): List<AccountView> =
         Balances.withBalances(d.accounts, d.transactions, debt)

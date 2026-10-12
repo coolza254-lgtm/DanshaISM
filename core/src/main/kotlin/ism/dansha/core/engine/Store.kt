@@ -405,7 +405,8 @@ class Store private constructor(d: DanshaData) {
 
     fun updateShopee(o0: ShopeeOrder): ShopeeOrder {
         val old = shopee.firstOrNull { it.id == o0.id } ?: fail("ไม่พบรายการ id=${o0.id}")
-        var o = o0.copy(created_at = old.created_at, order_date = date(o0.order_date))
+        var o = o0.copy(created_at = old.created_at, order_date = date(o0.order_date), received_date = date(o0.received_date))
+        if (o.received_date.isNotEmpty() && o.received_date < o.order_date) fail("วันที่กดรับของต้องไม่ก่อนวันสั่ง")
         shopee.replaceWhere(o.id, { it.id }, o)
         if (o.pay_method == "spaylater") syncSplBills(o.account_id)
         if (o.txn_id.isNotEmpty() && transactions.any { it.id == o.txn_id }) {
@@ -445,6 +446,8 @@ class Store private constructor(d: DanshaData) {
         subcategoryId: String = "",
         note: String = "",
         orderNo: String = "",
+        /** null = แบบเดิม (นับจากวันสั่ง), "" = ยังไม่กดรับของ, วันที่ = วันกดรับ */
+        receivedDate: String? = null,
     ): PurchaseResult {
         if (item.isEmpty()) fail("กรุณากรอกชื่อสินค้า")
         if (!(price > 0)) fail("กรุณากรอกราคา")
@@ -456,8 +459,10 @@ class Store private constructor(d: DanshaData) {
         var order = ShopeeOrder(
             id = "", order_date = day, item = item, shop = shop, price = price.toDec(), tenor = n,
             annual_rate = annualRate?.takeIf { it != 0.0 }?.toDec(), installment = inst,
-            account_id = acc.id, pay_method = if (spl) "spaylater" else "full", status = "active",
+            account_id = acc.id, pay_method = if (spl) "spaylater" else "full",
+            status = if (spl && receivedDate != null && receivedDate.isEmpty()) SPayLater.WAITING else "active",
             category_id = categoryId, note = note, order_no = orderNo,
+            received_date = if (spl) date(receivedDate.orEmpty()) else "",
         )
         if (spl && n > 1 && inst == null) fail("กรุณากรอกค่างวดจากแอพ Shopee")
         var txn: Transaction? = null
@@ -478,7 +483,7 @@ class Store private constructor(d: DanshaData) {
     /** ปรับยอดประมาณของค่างวด SPayLater ในแผนบิลที่ยังไม่จ่าย (ทุกรอบที่สร้างไว้แล้ว) */
     fun syncSplBills(accountId: String) {
         val acc = accounts.firstOrNull { it.id == accountId } ?: return
-        val st = SPayLater.state(acc, shopee, transactions, today())
+        val st = SPayLater.state(acc, shopee, transactions, today(), Engine.receiveDays(cfg()))
         val startDay = startDay()
         bills.replaceAll { b ->
             if (b.to_account_id != accountId || b.status == "paid") return@replaceAll b

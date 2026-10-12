@@ -64,7 +64,7 @@ fun SettingsPage(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) {
 
     fun save() {
         val keys = listOf(
-            "pay_cycle_start_day", "shop_warn_pct", "shop_buffer",
+            "pay_cycle_start_day", "shop_warn_pct", "shop_buffer", "shopee_receive_days",
             "copay_enabled", "copay_name", "copay_account_id", "copay_gov_rate", "copay_daily_cap", "copay_monthly_cap", "copay_total_cap", "copay_start", "copay_end",
             "daily_summary_enabled", "daily_summary_hour", "debt_reminder_enabled", "debt_reminder_days", "bill_reminder_enabled", "bill_reminder_days",
         )
@@ -88,6 +88,10 @@ fun SettingsPage(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) {
             Spacer(Modifier.width(8.dp))
             AmountField("เงินกันไว้ต่อรอบ (บาท)", v["shop_buffer"].orEmpty(), { v["shop_buffer"] = it }, Modifier.weight(1f))
         }
+        AmountField(
+            "Shopee: ยังไม่กดรับของ คาดว่ารับภายใน (วันหลังสั่ง)", v["shopee_receive_days"].orEmpty(), { v["shopee_receive_days"] = it.filter(Char::isDigit).take(2) },
+            supporting = "ใช้คาดรอบบิล SPayLater ของออเดอร์ที่ยังไม่ได้กดรับ (ค่าตั้งต้น 7 วัน)",
+        )
 
         Section("ไทยช่วยไทยพลัส 60/40")
         SwitchRow("เปิดใช้", bool("copay_enabled"), { v["copay_enabled"] = it.toString() })
