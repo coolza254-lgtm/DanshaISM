@@ -77,6 +77,13 @@ data class AscendState(
 ) : DebtState
 
 object DebtTracker {
+    /**
+     * วิธีรวมดอกเบี้ย (ดู SimInput.interestMode): แอพใช้ 3 = ตรงกับแอพ Ascend จริง (ดอกรายก้อนปัดเป็นสตางค์ก่อนรวม)
+     * ทดสอบเทียบระบบเดิม (JavaScript) ตั้งเป็น 0
+     */
+    @Volatile
+    var interestMode: Int = 3
+
 
     fun debtInput(account: Account, debts: List<Debt>, txns: List<Transaction>, until: String): SimInput {
         val since = account.debt_since.ifEmpty { "0000-00-00" }
@@ -101,7 +108,7 @@ object DebtTracker {
         val payments = txns
             .filter { t -> t.date >= since && ((t.type == "transfer" && t.to_account_id == account.id) || (t.type == "income" && t.account_id == account.id)) }
             .map { t -> PaymentIn(t.id, t.date, t.amount.num()) }
-        return SimInput(rate = rate, loans = loans, purchases = purchases, payments = payments, until = until)
+        return SimInput(rate = rate, loans = loans, purchases = purchases, payments = payments, until = until, interestMode = interestMode)
     }
 
     /** สรุปหนี้ของบัญชี ณ วันนี้ + บิลปัจจุบัน/ถัดไป (+ ตารางผ่อน) */

@@ -25,6 +25,11 @@ import kotlin.test.fail
  * - เลือกวันเอง: -Ddansha.dates=2026-10-03T12:00,2026-11-02T09:00
  */
 class ReferenceTest {
+    init {
+        // เทียบกับระบบเดิม: ใช้วิธีรวมดอกแบบเดิม (แอพจริงใช้แบบ Ascend = 3)
+        DebtTracker.interestMode = 0
+    }
+
     private val sample = Reference.dir?.let { File(it, "sample-data.json") }
 
     private fun requireNode(): Boolean {

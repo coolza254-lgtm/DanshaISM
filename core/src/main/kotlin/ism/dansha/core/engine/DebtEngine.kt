@@ -56,6 +56,12 @@ data class SimInput(
     val autoConvertMin: Double = 300.0,
     /** โหมดประมาณการ: สมมติว่าจ่ายเต็มบิลตรงวันครบกำหนดตั้งแต่วันนี้ */
     val autopayFrom: String? = null,
+    /**
+     * วิธีปัดดอกเบี้ยเป็นสตางค์: 0 = ปัดครึ่งขึ้น (ระบบเดิม), 1 = ปัดทิ้ง (ตัดเศษ) ตอนตัดชำระ/ออกบิล,
+     * 2 = แบบ 1 + ยอดดอกสะสมรวมปัดทิ้งรายก้อน,
+     * 3 = ปัดครึ่งขึ้นรายก้อนแล้วค่อยรวม (ตรงกับแอพ Ascend: ยอดปิดหนี้ = Σ เงินต้น + Σ ดอกแต่ละก้อนที่ปัดเป็นสตางค์แล้ว)
+     */
+    val interestMode: Int = 0,
 )
 
 // ---------- ผลลัพธ์ (ชื่อฟิลด์ตรงกับระบบเดิม) ----------
@@ -239,6 +245,9 @@ object DebtEngine {
         val autoTenor = input.autoConvertTenor
         val autoMin = input.autoConvertMin
         val autopayFrom = input.autopayFrom?.let { toDay(it) }
+        val mode = input.interestMode
+        /** ดอกเบี้ยเป็นสตางค์ตามโหมด */
+        fun ri(x: Double): Double = if (mode == 0 || mode == 3) r2(x) else kotlin.math.floor((x + 1e-7) * 100) / 100
 
         val loans = ArrayList<Loan>()
         val statements = ArrayList<Statement>()
@@ -274,7 +283,7 @@ object DebtEngine {
         fun billLoan(l: Loan, due: Int): Bill? {
             if (l.R <= EPS || l.k >= l.tenor) return null
             val projected = l.A + l.R * l.rate * (due - l.L) / 365
-            val interestDue = r2(projected)
+            val interestDue = ri(projected)
             l.k += 1
             var principalDue = r2(l.installment - interestDue - l.Ip)
             if (l.k >= l.tenor || principalDue >= l.R - EPS) principalDue = r2(l.R)
@@ -329,9 +338,9 @@ object DebtEngine {
             fun payLoan(l: Loan, cap: Double, extra: Boolean) {
                 // ดอกเบี้ยของก้อนนี้ก่อน แล้วค่อยเงินต้นของก้อนนี้
                 var limit = cap
-                val i = min(min(x0, r2(l.A)), limit)
+                val i = min(min(x0, ri(l.A)), limit)
                 if (i > 0) {
-                    l.A = r2(r2(l.A) - i)
+                    l.A = if (mode == 0 || mode == 3) r2(r2(l.A) - i) else maxOf(0.0, l.A - i)
                     x0 = r2(x0 - i)
                     limit = r2(limit - i)
                     alloc.interest = r2(alloc.interest + i)
@@ -467,7 +476,11 @@ object DebtEngine {
             log = log,
             fees = fees,
             outstanding = r2(loans.fold(0.0) { a, l -> a + l.R } + fulls.fold(0.0) { a, u -> a + u.remaining }),
-            accruedInterest = r2(loans.fold(0.0) { a, l -> a + l.A }),
+            accruedInterest = when (mode) {
+                0 -> r2(loans.fold(0.0) { a, l -> a + l.A })
+                2, 3 -> r2(loans.fold(0.0) { a, l -> a + ri(l.A) })
+                else -> ri(loans.fold(0.0) { a, l -> a + l.A })
+            },
         )
     }
 
