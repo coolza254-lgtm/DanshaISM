@@ -58,6 +58,7 @@ private sealed interface DebtAction {
     data class Quote(val accountId: String) : DebtAction
     data class Draw(val accountId: String) : DebtAction
     data class EditDebt(val accountId: String, val debtId: String?) : DebtAction
+    data class Reconcile(val accountId: String) : DebtAction
 }
 
 @Composable
@@ -143,6 +144,7 @@ fun DebtScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel) {
                 onDraw = { action = DebtAction.Draw(id) },
                 onAddLoan = { action = DebtAction.EditDebt(id, null) },
                 onEditLoan = { debtId -> action = DebtAction.EditDebt(id, debtId) },
+                onReconcile = { action = DebtAction.Reconcile(id) },
                 onClose = { detail = null },
             )
         } else androidx.compose.runtime.LaunchedEffect(Unit) { detail = null }
@@ -154,6 +156,12 @@ fun DebtScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel) {
         is DebtAction.Quote -> QuotePage(d, a.accountId, close)
         is DebtAction.Draw -> CashDrawPage(d, a.accountId, vm, close)
         is DebtAction.EditDebt -> DebtEditor(d, a.accountId, d.debts.firstOrNull { it.id == a.debtId }, vm, close)
+        is DebtAction.Reconcile -> {
+            val acc = d.accounts.firstOrNull { it.id == a.accountId }
+            val st = c?.debts?.get(a.accountId) as? AscendState
+            if (acc != null && st != null) ReconcilePage(d, acc, st, vm, close)
+            else androidx.compose.runtime.LaunchedEffect(Unit) { close() }
+        }
         null -> Unit
     }
 }

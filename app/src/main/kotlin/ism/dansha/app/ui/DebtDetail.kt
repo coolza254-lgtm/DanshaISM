@@ -62,6 +62,7 @@ fun DebtDetailPage(
     onDraw: () -> Unit,
     onAddLoan: () -> Unit,
     onEditLoan: (String) -> Unit,
+    onReconcile: () -> Unit,
     onClose: () -> Unit,
 ) {
     val p = LocalPalette.current
@@ -114,6 +115,7 @@ fun DebtDetailPage(
             OutlinedButton(onClick = onQuote) { Text("ยอดปิดหนี้") }
             OutlinedButton(onClick = onDraw) { Text("เบิกเงินสด") }
             OutlinedButton(onClick = onAddLoan) { Text("+ ก้อนหนี้") }
+            OutlinedButton(onClick = onReconcile) { Text("🔍 เทียบยอดกับ Ascend") }
         }
 
         // ---- แท็บ ----

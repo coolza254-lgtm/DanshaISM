@@ -109,6 +109,9 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
     var confirmDelete by remember { mutableStateOf(false) }
     var askDiscard by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
+    // กันจดซ้ำ: รายการเดียวกันเพิ่งจดไปไม่ถึง 10 นาที → ถามก่อน
+    var askDup by remember { mutableStateOf(false) }
+    var dupChecked by remember { mutableStateOf(false) }
 
     // จดไว: ช่องที่ผู้ใช้แตะเองแล้วจะไม่ถูกคำเดาทับ
     var quick by remember { mutableStateOf("") }
@@ -181,6 +184,15 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
             useCopay -> true
             hadCopay -> false
             else -> null
+        }
+        if (e == null && !dupChecked) {
+            val ra = row.amount
+            val now = java.time.LocalDateTime.now()
+            val twin = ra != null && d.transactions.any { t ->
+                t.type == row.type && t.account_id == row.account_id && t.date == row.date && t.amount?.compareTo(ra) == 0 &&
+                    runCatching { java.time.Duration.between(java.time.LocalDateTime.parse(t.created_at.take(19)), now).abs().toMinutes() < 10 }.getOrDefault(false)
+            }
+            if (twin) { askDup = true; return }
         }
         saving = true
         focus.clearFocus()
@@ -452,6 +464,12 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
     }
 
     if (pickDate) DatePickerPopup(date, { date = it }, { pickDate = false })
+    if (askDup) {
+        ConfirmDialog(
+            "จดซ้ำหรือเปล่า?", "รายการ ฿${formatMoney(value)} บัญชีเดียวกัน วันเดียวกัน เพิ่งจดไปเมื่อกี้", "จดอีกรายการ",
+            onConfirm = { askDup = false; dupChecked = true; save() }, onDismiss = { askDup = false }, danger = false,
+        )
+    }
     if (confirmDelete && e != null) {
         ConfirmDialog("ลบรายการนี้?", "ลบแล้วกู้คืนไม่ได้", "ลบ", {
             vm.edit<Unit>(ok = "ลบแล้ว", onError = { error = it }, onOk = { onClose() }) { deleteTransaction(e.id) }
