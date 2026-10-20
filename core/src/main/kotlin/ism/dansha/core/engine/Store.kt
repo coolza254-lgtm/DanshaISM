@@ -668,6 +668,22 @@ class Store private constructor(d: DanshaData) {
     fun setWorkDays(cycle: String, days: List<PlanBook.WorkDay>) {
         val k = PlanBook.workKey(cycle)
         if (days.isEmpty()) config.remove(k) else config[k] = PlanBook.encodeWorkDays(days)
+        // วันที่ไม่ได้ยกเว้นแล้ว → ลบเหตุผลทิ้ง
+        val keep = days.filter { it.skipGo || it.skipBack }.map { PlanBook.skipKey(it.date) }.toSet()
+        val (rs, re) = Dates.payCycleRange(cycle, startDay())
+        val prefix = PlanBook.skipKey("")
+        config.keys.filter { k -> k.startsWith(prefix) && k !in keep && k.removePrefix(prefix).let { it >= rs.toString() && it <= re.toString() } }
+            .toList().forEach { config.remove(it) }
+        syncPlan(cycle)
+    }
+
+    /** ยกเว้นค่ารถของวันหนึ่ง (ขาไป/ขากลับ) พร้อมเหตุผล — ไม่ได้อยู่ในแผนจะเพิ่มเป็นวันทำงานให้ */
+    fun setTravelSkip(cycle: String, date: String, skipGo: Boolean, skipBack: Boolean, reason: String) {
+        val days = PlanBook.workDays(config, cycle)
+        val cur = days.firstOrNull { it.date == date } ?: PlanBook.WorkDay(date, false)
+        config[PlanBook.workKey(cycle)] = PlanBook.encodeWorkDays(days.filter { it.date != date } + cur.copy(skipGo = skipGo, skipBack = skipBack))
+        val k = PlanBook.skipKey(date)
+        if ((skipGo || skipBack) && reason.isNotBlank()) config[k] = reason.trim() else config.remove(k)
         syncPlan(cycle)
     }
 

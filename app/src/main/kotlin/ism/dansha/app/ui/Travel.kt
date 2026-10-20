@@ -1,8 +1,11 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package ism.dansha.app.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -106,8 +109,9 @@ fun WorkDaysPage(d: DanshaData, cycle: String, vm: MainViewModel, onClose: () ->
     var grab by remember { mutableStateOf(amountText(fares.grab)) }
 
     fun setDay(date: String, state: Boolean?) {
-        val days = tp.list.map { PlanBook.WorkDay(it.date, it.late) }.filter { it.date != date } +
-            listOfNotNull(state?.let { PlanBook.WorkDay(date, it) })
+        val old = byDate[date]?.work
+        val days = tp.list.map { it.work }.filter { it.date != date } +
+            listOfNotNull(state?.let { old?.copy(late = it) ?: PlanBook.WorkDay(date, it) })
         vm.edit<Unit> { setWorkDays(cycle, days) }
     }
 
@@ -126,7 +130,7 @@ fun WorkDaysPage(d: DanshaData, cycle: String, vm: MainViewModel, onClose: () ->
         // โหมด
         TypeTabs(planMode) { planMode = it }
         Note(
-            if (planMode) "แตะวัน: 1 ครั้ง = ไปทำงาน 🚌 · 2 ครั้ง = กะ 14:00–23:00 กลับ Grab 🌙 · 3 ครั้ง = ไม่ไป"
+            if (planMode) "แตะวัน: 1 ครั้ง = ไปทำงาน 🚌 · 2 ครั้ง = กะ 14:00–23:00 กลับ Grab 🌙 · 3 ครั้ง = ไม่ไป · แตะค้าง = ยกเว้นค่ารถ 🚫"
             else "แตะวันที่ไปทำงาน แล้วกดราคาที่จ่ายจริง (ไม่ตรงก็กดใหม่ได้)",
             p.ink,
         )
@@ -147,6 +151,7 @@ fun WorkDaysPage(d: DanshaData, cycle: String, vm: MainViewModel, onClose: () ->
                         val bg = when {
                             !inCycle -> Color.Transparent
                             td == null -> p.surface
+                            td.skipAll -> p.line.copy(alpha = 0.5f)
                             td.done -> p.positiveSoft
                             partial -> p.warningSoft
                             td.late -> p.stickyBlue
@@ -156,7 +161,9 @@ fun WorkDaysPage(d: DanshaData, cycle: String, vm: MainViewModel, onClose: () ->
                             Modifier.weight(1f).aspectRatio(0.82f).clip(RoundedCornerShape(8.dp)).background(bg)
                                 .then(if (key == Dates.todayStr()) Modifier.border(2.dp, p.primary, RoundedCornerShape(8.dp)) else Modifier)
                                 .then(
-                                    if (inCycle) Modifier.clickable {
+                                    if (inCycle) Modifier.combinedClickable(
+                                        onLongClick = { if (td == null) setDay(key, false); openDay = key },
+                                    ) {
                                         if (planMode) setDay(key, when (td?.late) { null -> false; false -> true; true -> null })
                                         else if (td != null) openDay = key
                                         else setDay(key, false).also { openDay = key }
@@ -167,7 +174,10 @@ fun WorkDaysPage(d: DanshaData, cycle: String, vm: MainViewModel, onClose: () ->
                             if (inCycle) Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(dt.dayOfMonth.toString(), fontSize = 14.sp, color = p.ink, fontWeight = if (td != null) FontWeight.Bold else FontWeight.Normal)
                                 if (td != null) {
-                                    Text(if (td.done) "✓" else if (td.late) "🌙" else "🚌", fontSize = 11.sp, color = p.positive, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        when { td.skipAll -> "🚫"; td.done -> "✓"; td.skipGo || td.skipBack -> (if (td.late) "🌙" else "🚌") + "½"; td.late -> "🌙"; else -> "🚌" },
+                                        fontSize = 11.sp, color = p.positive, fontWeight = FontWeight.Bold,
+                                    )
                                     Text(
                                         if (td.done || partial) amountText(td.paid) else amountText(td.planGo + td.planBack),
                                         fontSize = 10.sp, color = if (td.done) p.positive else p.muted,
@@ -186,10 +196,11 @@ fun WorkDaysPage(d: DanshaData, cycle: String, vm: MainViewModel, onClose: () ->
             Legend(p.stickyBlue, "🌙 กะดึก")
             Legend(p.warningSoft, "จดไม่ครบ")
             Legend(p.positiveSoft, "✓ จ่ายแล้ว")
+            Legend(p.line.copy(alpha = 0.5f), "🚫 ยกเว้น")
         }
         if (planMode) WrapRow {
             OutlinedButton(onClick = {
-                val days = tp.list.map { PlanBook.WorkDay(it.date, it.late) }.toMutableList()
+                val days = tp.list.map { it.work }.toMutableList()
                 var x = rs
                 while (!x.isAfter(re)) { if (x.dayOfWeek.value <= 5 && days.none { it.date == x.toString() }) days += PlanBook.WorkDay(x.toString(), false); x = x.plusDays(1) }
                 vm.edit<Unit> { setWorkDays(cycle, days) }
@@ -203,7 +214,7 @@ fun WorkDaysPage(d: DanshaData, cycle: String, vm: MainViewModel, onClose: () ->
             Text("ยังไม่ได้จด (${missing.size} วัน)", fontWeight = FontWeight.SemiBold, color = p.warning)
             missing.forEach { td ->
                 Row(Modifier.fillMaxWidth().clickable { openDay = td.date }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(dayTitle(td.date) + if (td.late) " 🌙" else " 🚌", Modifier.weight(1f), color = p.ink)
+                    Text(dayTitle(td.date) + (if (td.late) " 🌙" else " 🚌") + td.reason.ifEmpty { null }?.let { " · $it" }.orEmpty(), Modifier.weight(1f), color = p.ink)
                     Text("จด ›", color = p.primary, fontWeight = FontWeight.SemiBold)
                 }
             }
@@ -268,6 +279,7 @@ private fun TravelDayDialog(td: PlanBook.TravelDay, fares: PlanBook.TravelFares,
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 ChoiceChips(listOf(false to "🚌 ไปทำงาน", true to "🌙 กะดึก (กลับ Grab)"), td.late, { onType(it) })
+                SkipPicker(td, vm, cycle)
                 LegPicker(td, fares, vm, cycle)
                 Text(
                     "เผื่อไว้ ฿${formatMoney(td.planGo + td.planBack)} · จ่ายจริง ฿${formatMoney(td.paid)}" +
@@ -281,6 +293,55 @@ private fun TravelDayDialog(td: PlanBook.TravelDay, fares: PlanBook.TravelFares,
     )
 }
 
+private val SKIP_REASONS = listOf("มีคนไปส่ง", "บริษัทจ่าย", "ทำงานที่บ้าน", "ลา/ไม่ได้ไป")
+
+/** ยกเว้นค่ารถ: เลือกขาที่ไม่ต้องจ่าย + เหตุผล (ไม่ต้องเผื่อเงิน ไม่นับว่าค้างจด) */
+@Composable
+private fun SkipPicker(td: PlanBook.TravelDay, vm: MainViewModel, cycle: String) {
+    val p = LocalPalette.current
+    var open by remember(td.date) { mutableStateOf(td.skipGo || td.skipBack) }
+    var reason by remember(td.date) { mutableStateOf(td.reason) }
+    fun set(go: Boolean, back: Boolean, why: String = reason) {
+        vm.edit<Unit> { setTravelSkip(cycle, td.date, go, back, why) }
+    }
+    if (!open) {
+        Text("🚫 ยกเว้นค่ารถวันนี้ (มีเหตุอื่น) ›", Modifier.clickable { open = true }, color = p.primary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        return
+    }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(p.surface).padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("ยกเว้นค่ารถ (ไม่ต้องเผื่อเงิน)", fontSize = 14.sp, color = p.ink, fontWeight = FontWeight.SemiBold)
+        WrapRow {
+            SkipChip("ขาไป", td.skipGo) { set(!td.skipGo, td.skipBack) }
+            SkipChip(if (td.late) "ขากลับ (Grab)" else "ขากลับ", td.skipBack) { set(td.skipGo, !td.skipBack) }
+            SkipChip("ทั้งวัน", td.skipAll) { val v = !td.skipAll; set(v, v) }
+        }
+        if (td.skipGo || td.skipBack) {
+            WrapRow {
+                SKIP_REASONS.forEach { r -> SkipChip(r, reason == r) { reason = if (reason == r) "" else r; set(td.skipGo, td.skipBack, reason) } }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextInput("เหตุผลอื่นๆ", reason, { reason = it }, Modifier.weight(1f))
+                if (reason != td.reason) {
+                    Spacer(Modifier.width(6.dp))
+                    androidx.compose.material3.TextButton(onClick = { set(td.skipGo, td.skipBack) }) { Text("บันทึก") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SkipChip(label: String, on: Boolean, onClick: () -> Unit) {
+    val p = LocalPalette.current
+    Text(
+        (if (on) "✓ " else "") + label,
+        Modifier.clip(RoundedCornerShape(50)).background(if (on) p.primary else p.card)
+            .border(1.5.dp, if (on) p.primary else p.ink.copy(alpha = 0.4f), RoundedCornerShape(50))
+            .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
+        color = if (on) p.onPrimary else p.ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+    )
+}
+
 /** ปุ่มจดขาไป / ขากลับ — ใช้ทั้งในหน้าค่าเดินทางและการ์ดหน้าภาพรวม */
 @Composable
 private fun LegPicker(td: PlanBook.TravelDay, fares: PlanBook.TravelFares, vm: MainViewModel, cycle: String) {
@@ -288,8 +349,11 @@ private fun LegPicker(td: PlanBook.TravelDay, fares: PlanBook.TravelFares, vm: M
     fun set(leg: String, amount: Double?) {
         vm.edit<Any?>(ok = amount?.let { "จดค่ารถ ฿${formatMoney(it)}" }) { setTravelLeg(td.date, leg, amount).also { syncPlan(cycle) } }
     }
-    LegRow("ขาไป (รถเมล์)", td.go?.amount?.toDouble(), fares.choices, onPick = { set("go", it) }, onClear = { set("go", null) })
-    if (td.late) {
+    if (td.skipGo && td.go == null) Text("ขาไป: 🚫 ยกเว้น" + td.reason.ifEmpty { null }?.let { " · $it" }.orEmpty(), fontSize = 14.sp, color = p.muted)
+    else LegRow("ขาไป (รถเมล์)", td.go?.amount?.toDouble(), fares.choices, onPick = { set("go", it) }, onClear = { set("go", null) })
+    if (td.skipBack && td.back == null) {
+        Text("ขากลับ: 🚫 ยกเว้น" + td.reason.ifEmpty { null }?.let { " · $it" }.orEmpty(), fontSize = 14.sp, color = p.muted)
+    } else if (td.late) {
         var grabText by remember(td.back?.id) { mutableStateOf(amountText(td.back?.amount)) }
         Text("ขากลับ (Grab · เบิก Staff Claim ได้)", fontSize = 14.sp, color = p.ink, fontWeight = FontWeight.Medium)
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -342,7 +406,8 @@ fun TravelTodayCard(d: DanshaData, vm: MainViewModel) {
             Text(if (td.done) "✅" else if (td.late) "🌙" else "🚌", fontSize = 20.sp)
             Spacer(Modifier.width(8.dp))
             Text(
-                if (td.done) "ค่ารถวันนี้จดครบแล้ว ฿${formatMoney(td.paid)}" else if (td.late) "ไปทำงานวันนี้ · กะ 14:00–23:00" else "ไปทำงานวันนี้",
+                if (td.skipAll) "วันนี้ไม่มีค่ารถ 🚫" + td.reason.ifEmpty { null }?.let { " ($it)" }.orEmpty()
+                else if (td.done) "ค่ารถวันนี้จดครบแล้ว ฿${formatMoney(td.paid)}" else if (td.late) "ไปทำงานวันนี้ · กะ 14:00–23:00" else "ไปทำงานวันนี้",
                 Modifier.weight(1f), fontFamily = Hand, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = p.primary,
             )
         }

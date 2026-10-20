@@ -61,14 +61,21 @@ object PlanBook {
     /** วันทำงานของรอบ: key ใน config = "work:<yyyy-MM ของรอบ>", ค่า = "2026-10-16,2026-10-17*,…" (* = กะ 14:00–23:00 กลับ Grab) */
     fun workKey(cycle: String) = "work:" + cycle.take(7)
 
-    data class WorkDay(val date: String, val late: Boolean)
+    /** skipGo/skipBack = ยกเว้นค่ารถขานั้น (มีคนไปส่ง, บริษัทจ่าย ฯลฯ) → ไม่ต้องเผื่อเงิน */
+    data class WorkDay(val date: String, val late: Boolean, val skipGo: Boolean = false, val skipBack: Boolean = false)
 
+    /** รูปแบบ: 2026-10-16 · 2026-10-17* (กะดึก) · ต่อท้าย !g = ยกเว้นขาไป, !b = ยกเว้นขากลับ */
     fun workDays(config: Map<String, String>, cycle: String): List<WorkDay> =
         config[workKey(cycle)].orEmpty().split(',').map { it.trim() }.filter { it.length >= 10 }
-            .map { WorkDay(it.take(10), it.endsWith("*")) }.distinctBy { it.date }.sortedBy { it.date }
+            .map { WorkDay(it.take(10), it.contains('*'), it.contains("!g"), it.contains("!b")) }.distinctBy { it.date }.sortedBy { it.date }
 
     fun encodeWorkDays(days: List<WorkDay>): String =
-        days.sortedBy { it.date }.joinToString(",") { it.date + if (it.late) "*" else "" }
+        days.sortedBy { it.date }.joinToString(",") {
+            it.date + (if (it.late) "*" else "") + (if (it.skipGo) "!g" else "") + (if (it.skipBack) "!b" else "")
+        }
+
+    /** เหตุผลที่ยกเว้นค่ารถของวันนั้น (config "travel_why:<วันที่>") */
+    fun skipKey(date: String) = "travel_why:$date"
 
     /**
      * ค่ารถที่เผื่อไว้ตอนวางแผน: รถเมล์เที่ยวละ 20 (กรณีแพงสุดของ 8/12/20) — จ่ายจริงน้อยกว่าค่อยจดตามจริง
@@ -94,9 +101,15 @@ object PlanBook {
         val back: Transaction?,
         val planGo: Double,
         val planBack: Double,
+        val skipGo: Boolean = false,
+        val skipBack: Boolean = false,
+        /** เหตุผลที่ยกเว้น */
+        val reason: String = "",
     ) {
+        val work: WorkDay get() = WorkDay(date, late, skipGo, skipBack)
+        val skipAll: Boolean get() = skipGo && skipBack
         val paid: Double get() = (go?.amount.num()) + (back?.amount.num())
-        val done: Boolean get() = go != null && back != null
+        val done: Boolean get() = (go != null || skipGo) && (back != null || skipBack)
         /** ยังต้องเตรียม = ขาที่ยังไม่จด */
         val pending: Double get() = (if (go == null) planGo else 0.0) + (if (back == null) planBack else 0.0)
         /** ประหยัดได้จากขาที่จดแล้ว (เผื่อ − จ่ายจริง) */
@@ -133,7 +146,12 @@ object PlanBook {
         val f = fares(cfg)
         val list = workDays(cfg, cycle).map { w ->
             val (go, back) = legs(d, w.date)
-            TravelDay(w.date, w.late, go, back, f.bus, if (w.late) f.grab else f.bus)
+            TravelDay(
+                w.date, w.late, go, back,
+                planGo = if (w.skipGo) 0.0 else f.bus,
+                planBack = if (w.skipBack) 0.0 else if (w.late) f.grab else f.bus,
+                skipGo = w.skipGo, skipBack = w.skipBack, reason = cfg[skipKey(w.date)].orEmpty(),
+            )
         }
         val (rs, re) = Dates.payCycleRange(cycle, Engine.startDay(cfg))
         val spent = d.transactions.filter { isTravelTxn(it) && it.date >= rs.toString() && it.date <= re.toString() }.sumOf { it.amount.num() }

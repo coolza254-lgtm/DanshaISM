@@ -129,3 +129,30 @@ class BulkTest {
         assertEquals(2500.0, again.data.billTemplates.single { it.name == "ค่าเช่าบ้าน" }.est_amount.num())
     }
 }
+
+class TravelSkipTest {
+    private val base = ism.dansha.core.Schema.seed().copy(
+        accounts = listOf(ism.dansha.core.Account("acc_cash", "เงินสด", "cash", "THB", active = true)),
+    )
+
+    @org.junit.jupiter.api.Test
+    fun skipLegsNotPlanned() {
+        val cycle = "2099-10 Oct-Nov"
+        val r = Store.run(base) {
+            setWorkDays(cycle, listOf(PlanBook.WorkDay("2099-10-20", false), PlanBook.WorkDay("2099-10-21", true)))
+            setTravelSkip(cycle, "2099-10-20", skipGo = true, skipBack = false, reason = "แฟนไปส่ง")
+            setTravelSkip(cycle, "2099-10-21", skipGo = true, skipBack = true, reason = "")
+        }
+        val tp = PlanBook.travel(r.data, cycle)
+        val d1 = tp.list.first { it.date == "2099-10-20" }
+        kotlin.test.assertEquals(0.0, d1.planGo)
+        kotlin.test.assertEquals(20.0, d1.planBack)
+        kotlin.test.assertEquals("แฟนไปส่ง", d1.reason)
+        val d2 = tp.list.first { it.date == "2099-10-21" }
+        kotlin.test.assertTrue(d2.done && d2.late && d2.skipAll)
+        kotlin.test.assertEquals(20.0, tp.total)
+        // เลิกยกเว้น → เหตุผลหาย
+        val r2 = Store.run(r.data) { setWorkDays(cycle, listOf(PlanBook.WorkDay("2099-10-20", false))) }
+        kotlin.test.assertTrue(r2.data.config.keys.none { it.startsWith("travel_why:") })
+    }
+}
