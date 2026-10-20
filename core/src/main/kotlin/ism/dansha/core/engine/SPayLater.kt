@@ -26,6 +26,8 @@ data class SplInstallment(
     val amount: Double,
     val paid: Double = 0.0,
     val left: Double = 0.0,
+    /** "" = สินค้า | food = ค่าอาหาร */
+    val kind: String = "",
 )
 
 @Serializable
@@ -62,12 +64,15 @@ object SPayLater {
      * ออเดอร์เก่าที่ไม่มีวันรับ → ใช้วันสั่ง (แบบระบบเดิม)
      */
     fun basisDate(o: ShopeeOrder, receiveDays: Int = DEFAULT_RECEIVE_DAYS): String = when {
+        o.kind == FOOD -> o.order_date
         o.received_date.isNotEmpty() -> o.received_date
         o.status == WAITING && o.order_date.length >= 10 -> LocalDate.parse(o.order_date.substring(0, 10)).plusDays(receiveDays.toLong()).toString()
         else -> o.order_date
     }
 
     const val WAITING = "waiting"
+    /** ค่าอาหาร: ถือว่าจ่ายแล้ว ไปอยู่ในบิลตามวันสั่ง */
+    const val FOOD = "food"
     const val DEFAULT_RECEIVE_DAYS = 7
 
     /** วันตัดรอบของบิลที่ครบกำหนด due (วันที่ 15 ของเดือนเดียวกับ due) */
@@ -83,7 +88,7 @@ object SPayLater {
             for (k in 1..n) {
                 // งวดสุดท้ายปรับเศษให้รวมเท่ากับยอดผ่อนทั้งหมด (กรณีไม่ได้กรอกค่างวด)
                 val amt = if (noInstallment && k == n) round2(price - inst * (n - 1)) else inst
-                list += SplInstallment(o.id, o.item, k, n, dueDate(basisDate(o, receiveDays), k), amt)
+                list += SplInstallment(o.id, o.item, k, n, dueDate(basisDate(o, receiveDays), k), amt, kind = o.kind)
             }
         }
         return list.sortedWith(compareBy<SplInstallment> { it.due }.thenBy { it.order })

@@ -254,9 +254,20 @@ private fun LoanCard(l: LoanOut, rows: List<StatementRow>?, editable: Boolean, o
 @Composable
 private fun SplDetail(st: SplState) {
     val p = LocalPalette.current
-    val byOrder = st.installments.groupBy { it.order }
+    // ค่าอาหาร: รวมเป็นก้อนต่อบิล
+    val food = st.installments.filter { it.kind == ism.dansha.core.engine.SPayLater.FOOD && it.left > 0.004 }
+    if (food.isNotEmpty()) {
+        DetailHeader("🍜 ค่าอาหารที่รอจ่าย (${food.size} รายการ)")
+        Card {
+            food.groupBy { it.due }.toSortedMap().forEach { (due, l) ->
+                KeyValue("บิลครบ ${thaiDate(due)} (${l.size} รายการ)", m(l.sumOf { it.left }), bold = true)
+                l.forEach { i -> KeyValue("   ${i.item}", m(i.left)) }
+            }
+        }
+    }
+    val byOrder = st.installments.filter { it.kind != ism.dansha.core.engine.SPayLater.FOOD }.groupBy { it.order }
     val openOrders = byOrder.filter { (_, l) -> l.any { it.left > 0.004 } }
-    DetailHeader("ออเดอร์ที่ผ่อนอยู่ (${openOrders.size})")
+    DetailHeader("🛍️ ออเดอร์สินค้าที่ผ่อนอยู่ (${openOrders.size})")
     openOrders.forEach { (orderId, list) -> androidx.compose.runtime.key(orderId) {
         var open by remember { mutableStateOf(false) }
         val first = list.first()

@@ -117,7 +117,7 @@ interface DanshaDao {
         BillTemplateEntity::class, DebtEntity::class, ShopeeEntity::class, PortEntity::class,
         CategoryEntity::class, FxEntity::class, PriceEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -136,7 +136,14 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v3: ประเภทออเดอร์ Shopee (ค่าอาหาร) */
+        private val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE shopee ADD COLUMN kind TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         fun open(context: Context): AppDatabase =
-            Room.databaseBuilder(context, AppDatabase::class.java, "dansha.db").addMigrations(MIGRATION_1_2).build()
+            Room.databaseBuilder(context, AppDatabase::class.java, "dansha.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
     }
 }

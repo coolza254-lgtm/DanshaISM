@@ -251,7 +251,7 @@ object Outlook {
 
     /** สถิติพฤติกรรมช้อปปิ้ง */
     fun shopeeStats(all: List<ShopeeOrder>): ShopeeStats {
-        val orders = all.filter { it.status != "cancelled" }
+        val orders = all.filter { it.status != "cancelled" && it.kind != SPayLater.FOOD }
         val byMonth = LinkedHashMap<String, MonthStat>()
         val byShop = LinkedHashMap<String, ShopStat>()
         var installmentTotal = 0.0

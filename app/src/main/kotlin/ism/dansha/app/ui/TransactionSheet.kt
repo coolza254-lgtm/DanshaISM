@@ -375,6 +375,10 @@ fun TransactionEditor(d: DanshaData, existing: Transaction?, vm: MainViewModel, 
                     // บัญชี
                     SheetLabel(if (type == "transfer") "จากบัญชี" else if (type == "income") "เข้าบัญชี" else "จ่ายจากบัญชี")
                     AccountChips(accounts, accountId) { accountId = it; touchedAcc = true; if (toAccountId == it) toAccountId = "" }
+                    if (type == "expense" && ism.dansha.core.engine.isSplAccount(accounts.firstOrNull { it.id == accountId }) && e?.source != "shopee") {
+                        val due = runCatching { ism.dansha.core.engine.SPayLater.dueDate(date, 1) }.getOrNull()
+                        Text("🍜 จ่ายด้วย SPayLater (ไม่ต้องกดรับ) → ไปบิล ครบ ${due?.let(::thaiDate) ?: "-"}", fontSize = 13.sp, color = p.muted)
+                    }
                     if (type == "transfer") {
                         SheetLabel("ไปบัญชี (จ่ายหนี้ = โอนเข้าบัญชีวงเงิน)")
                         AccountChips(accounts.filter { it.id != accountId }, toAccountId) { toAccountId = it }

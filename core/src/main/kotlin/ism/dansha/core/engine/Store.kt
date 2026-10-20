@@ -178,6 +178,7 @@ class Store private constructor(d: DanshaData) {
     fun createTransaction(t: Transaction, copay: Boolean? = null): Transaction {
         val row = validateTransaction(t.copy(id = Ids.newId("txn"), created_at = Dates.nowIso()), true, copay)
         transactions += row
+        syncFoodOrder(row)
         return row
     }
 
@@ -185,12 +186,49 @@ class Store private constructor(d: DanshaData) {
         val old = transactions.firstOrNull { it.id == t.id } ?: fail("ไม่พบรายการ id=${t.id}")
         val row = validateTransaction(t, false, copay).copy(created_at = old.created_at)
         transactions.replaceWhere(t.id, { it.id }, row)
+        syncFoodOrder(row)
         return row
+    }
+
+    /**
+     * ค่าอาหารที่จ่ายด้วย SPayLater = รายจ่ายบนบัญชี SPayLater (ที่ไม่ได้มาจากหน้า Shopee)
+     * → ผูกออเดอร์ประเภท food 1 งวด (ไม่ต้องกดรับ นับรอบบิลจากวันที่จ่าย) ให้ยอดไปอยู่ในบิล SPayLater
+     * ย้ายไปบัญชีอื่น/เปลี่ยนเป็นรายรับ → ลบออเดอร์ที่ผูกไว้
+     */
+    private fun syncFoodOrder(t: Transaction) {
+        val linked = shopee.firstOrNull { it.txn_id == t.id && it.kind == SPayLater.FOOD }
+        val acc = accounts.firstOrNull { it.id == t.account_id }
+        val want = t.type == "expense" && isSplAccount(acc) && t.source != "shopee"
+        if (!want) {
+            if (linked != null) { shopee.removeOne(linked.id) { it.id }; syncSplBills(linked.account_id) }
+            return
+        }
+        val catName = categories.firstOrNull { it.id == t.subcategory_id.ifEmpty { t.category_id } }?.name.orEmpty()
+        val item = t.note.ifEmpty { catName.ifEmpty { "ค่าอาหาร" } }
+        val price = t.amount.num().toDec()
+        if (linked == null) {
+            createShopee(
+                ShopeeOrder(
+                    id = "", order_date = t.date, item = item, price = price, tenor = 1, installment = price,
+                    account_id = t.account_id, pay_method = "spaylater", status = "active",
+                    category_id = t.category_id, txn_id = t.id, received_date = t.date, kind = SPayLater.FOOD,
+                )
+            )
+        } else {
+            shopee.replaceWhere(linked.id, { it.id }, linked.copy(
+                order_date = t.date, received_date = t.date, item = item, price = price, installment = price,
+                account_id = t.account_id, category_id = t.category_id,
+            ))
+            if (linked.account_id != t.account_id) syncSplBills(linked.account_id)
+        }
+        syncSplBills(t.account_id)
     }
 
     /** ลบรายการ → ลบหนี้ย่อยที่ผูก, ปลดลิงก์ Shopee, ถ้ามาจากแผนบิลให้แผนกลับเป็น planned */
     fun deleteTransaction(id: String) {
         debts.removeAll { it.txn_id == id }
+        // ค่าอาหาร SPayLater: ลบรายจ่าย = ลบออเดอร์ด้วย
+        shopee.filter { it.txn_id == id && it.kind == SPayLater.FOOD }.forEach { o -> shopee.removeOne(o.id) { it.id }; syncSplBills(o.account_id) }
         shopee.replaceAll { if (it.txn_id == id) it.copy(txn_id = "") else it }
         val t = transactions.firstOrNull { it.id == id }
         if (t != null && t.source == "bill_plan" && t.ref_id.isNotEmpty() && bills.any { it.id == t.ref_id }) {

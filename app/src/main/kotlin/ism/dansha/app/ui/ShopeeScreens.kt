@@ -47,6 +47,9 @@ fun ShopeePage(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onC
     var recording by remember { mutableStateOf(false) }
     var checking by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<ShopeeOrder?>(null) }
+    // ค่าอาหาร: null = ปิด, "" = จดใหม่, id = แก้รายจ่ายที่ผูกไว้
+    var food by remember { mutableStateOf<String?>(null) }
+    var filter by remember { mutableStateOf("") }
     val spl = c?.debts?.values?.filterIsInstance<SplState>().orEmpty()
     val perOrder = spl.flatMap { it.perOrder.entries }.associate { it.key to it.value }
     val stats = remember(d) { Engine.shopeeStats(d) }
@@ -54,7 +57,8 @@ fun ShopeePage(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onC
 
     FormPage("Shopee", onClose, onSave = null) {
         WrapRow {
-            Button(onClick = { recording = true }) { Text("บันทึกออเดอร์") }
+            Button(onClick = { recording = true }) { Text("🛍️ ออเดอร์สินค้า") }
+            if (spl.isNotEmpty()) Button(onClick = { food = "" }) { Text("🍜 ค่าอาหาร") }
             OutlinedButton(onClick = { checking = true }) { Text("เช็คก่อนซื้อ") }
         }
         spl.forEach { st ->
@@ -62,21 +66,32 @@ fun ShopeePage(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onC
                 Text(d.accounts.firstOrNull { it.id == st.accountId }?.name ?: "SPayLater", fontWeight = FontWeight.SemiBold)
                 KeyValue("ยอดค้างทั้งหมด", money(st.outstanding), bold = true)
                 st.currentBill?.let { KeyValue(if (it.overdue == true) "ค้างจ่าย (เลยกำหนด)" else "บิลเดือนนี้ ครบ ${thaiDate(it.due)}", money(it.amount), if (it.overdue == true) DanshaColors.Negative else DanshaColors.Ink) }
-                st.bills.take(4).forEach { b -> KeyValue("ครบ ${thaiDate(b.due)}", money(b.totalDue)) }
+                st.bills.take(4).forEach { b ->
+                    KeyValue("ครบ ${thaiDate(b.due)}", money(b.totalDue))
+                    val rows = st.installments.filter { it.due == b.due && it.left > 0.004 }
+                    val f = rows.filter { it.kind == SPayLater.FOOD }.sumOf { it.left }
+                    if (f > 0.004) Note("   🛍️ สินค้า ${money(rows.sumOf { it.left } - f)} · 🍜 อาหาร ${money(f)}")
+                }
                 if (st.credit > 0) KeyValue("จ่ายเกิน (เครดิต)", money(st.credit))
             }
         }
-        Text("ออเดอร์", fontWeight = FontWeight.SemiBold)
-        val orders = d.shopee.sortedWith(compareByDescending<ShopeeOrder> { it.order_date }.thenByDescending { it.created_at })
-        if (orders.isEmpty()) Note("ยังไม่มีออเดอร์")
+        Text("รายการ", fontWeight = FontWeight.SemiBold)
+        ChoiceChips(listOf("" to "ทั้งหมด", "goods" to "🛍️ สินค้า", SPayLater.FOOD to "🍜 อาหาร"), filter, { filter = it })
+        val orders = d.shopee.filter { filter.isEmpty() || (if (filter == SPayLater.FOOD) it.kind == SPayLater.FOOD else it.kind != SPayLater.FOOD) }
+            .sortedWith(compareByDescending<ShopeeOrder> { it.order_date }.thenByDescending { it.created_at })
+        if (orders.isEmpty()) Note("ยังไม่มีรายการ")
         orders.forEach { o ->
             val po = perOrder[o.id]
-            Column(Modifier.fillMaxWidth().clickable { editing = o }.padding(vertical = 6.dp)) {
+            val isFood = o.kind == SPayLater.FOOD
+            Column(Modifier.fillMaxWidth().clickable { if (isFood) food = o.txn_id else editing = o }.padding(vertical = 6.dp)) {
                 Row {
-                    Text(o.item, Modifier.weight(1f), color = if (o.status == "cancelled") DanshaColors.Muted else DanshaColors.Ink, maxLines = 2)
+                    Text((if (isFood) "🍜 " else "🛍️ ") + o.item, Modifier.weight(1f), color = if (o.status == "cancelled") DanshaColors.Muted else DanshaColors.Ink, maxLines = 2)
                     Text(formatMoney(o.price), fontWeight = FontWeight.SemiBold)
                 }
-                Text(
+                if (isFood) Text(
+                    thaiDate(o.order_date) + " · ค่าอาหาร SPayLater · " + (po?.let { if (it.left > 0) "ไปบิล ครบ ${it.next?.let(::thaiDate) ?: "-"}" else "จ่ายบิลแล้ว" } ?: ""),
+                    color = DanshaColors.Muted, fontSize = 13.sp,
+                ) else Text(
                     listOfNotNull(
                         thaiDate(o.order_date),
                         o.shop.ifEmpty { null },
@@ -123,6 +138,51 @@ fun ShopeePage(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onC
     if (recording) PurchaseForm(d, vm) { recording = false }
     if (checking) CheckPurchasePage(d) { checking = false }
     editing?.let { o -> OrderEditor(d, o, vm) { editing = null } }
+    food?.let { id -> FoodForm(d, d.transactions.firstOrNull { it.id == id }, vm) { food = null } }
+}
+
+/** ค่าอาหารจ่ายด้วย SPayLater: ถือว่าจ่ายแล้ว ไม่ต้องกดรับ → ไปอยู่ในบิลตามวันสั่ง (ตัดรอบวันที่ 15) และนับเป็นรายจ่ายหมวดอาหาร */
+@Composable
+private fun FoodForm(d: DanshaData, e: ism.dansha.core.Transaction?, vm: MainViewModel, onClose: () -> Unit) {
+    val splAccounts = d.accounts.filter { isSplAccount(it) && (it.active || it.id == e?.account_id) }
+    val foodCat = d.categories.firstOrNull { it.parent_id.isEmpty() && it.type == "expense" && it.name == "อาหาร" }
+    val delivery = d.categories.firstOrNull { it.parent_id == foodCat?.id && it.name == "เดลิเวอรี่" }
+    var item by remember { mutableStateOf(e?.note.orEmpty()) }
+    var price by remember { mutableStateOf(amountText(e?.amount)) }
+    var accountId by remember { mutableStateOf(e?.account_id ?: splAccounts.firstOrNull()?.id.orEmpty()) }
+    var date by remember { mutableStateOf(e?.date ?: Dates.todayStr()) }
+    var categoryId by remember { mutableStateOf(e?.category_id ?: foodCat?.id.orEmpty()) }
+    var subId by remember { mutableStateOf(e?.subcategory_id ?: delivery?.id.orEmpty()) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    fun save() {
+        val amt = Forms.parseAmount(price)
+        val acc = d.accounts.firstOrNull { it.id == accountId }
+        val row = (e ?: ism.dansha.core.Transaction(id = "")).copy(
+            date = date, type = "expense", account_id = accountId, amount = amt?.toDec(), currency = acc?.currency ?: "THB",
+            category_id = categoryId, subcategory_id = subId, note = item.trim(),
+        )
+        vm.edit<Any>(ok = if (e == null) "จดค่าอาหารแล้ว" else "แก้แล้ว", onError = { error = it }, onOk = { onClose() }) {
+            if (e == null) createTransaction(row) else updateTransaction(row)
+        }
+    }
+
+    FormPage(if (e == null) "🍜 ค่าอาหาร (SPayLater)" else "แก้ค่าอาหาร", onClose, ::save) {
+        error?.let { Note(it, DanshaColors.Negative) }
+        TextInput("เมนู / ร้าน", item, { item = it })
+        AmountField("ราคา", price, { price = it })
+        if (splAccounts.size > 1) Picker("จ่ายด้วย", splAccounts.map { it.id to it.name }, accountId, { accountId = it })
+        DateField("วันที่สั่ง", date, { date = it })
+        val due = runCatching { SPayLater.dueDate(date, 1) }.getOrNull()
+        due?.let { Note("ถือว่าจ่ายแล้ว ไม่ต้องกดรับ → ไปอยู่ในบิล ครบ ${thaiDate(it)} (สั่ง 1–14 → จ่าย 25 เดือนนี้ · 15 ขึ้นไป → เดือนหน้า)", DanshaColors.Ink) }
+        val tree = Forms.categoryTree(d, "expense", keep = setOf(categoryId, subId))
+        Picker("หมวด", listOf("" to "— ไม่ระบุ —") + tree.map { it.category.id to "${it.category.icon} ${it.category.name}" }, categoryId, { categoryId = it; subId = "" })
+        val subs = tree.firstOrNull { it.category.id == categoryId }?.children.orEmpty()
+        if (subs.isNotEmpty()) ChoiceChips(listOf("" to "ทั้งหมวด") + subs.map { it.id to it.name }, subId, { subId = it })
+        if (e != null) DeleteButton("รายการนี้") {
+            vm.edit<Unit>(ok = "ลบแล้ว", onError = { error = it }, onOk = { onClose() }) { deleteTransaction(e.id) }
+        }
+    }
 }
 
 @Composable

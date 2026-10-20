@@ -82,7 +82,7 @@ fun dueBills(acc: Account, st: DebtState, limit: Int = 12): List<DueBillView> {
                 val list = byDue.getValue(due)
                 out += DueBillView(
                     acc, due, list.sumOf { it.left }, due < today, due.take(7) <= today.take(7),
-                    list.map { BillPart(it.item, it.k, it.n, null, null, it.left) },
+                    list.map { BillPart((if (it.kind == ism.dansha.core.engine.SPayLater.FOOD) "🍜 " else "") + it.item, it.k, it.n, null, null, it.left) },
                 )
             }
         }

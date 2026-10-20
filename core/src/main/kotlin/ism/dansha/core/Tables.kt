@@ -151,6 +151,8 @@ data class ShopeeOrder(
     val order_no: String = "",
     /** วันที่กดรับสินค้า (SPayLater นับรอบบิลจากวันนี้) "" = ยังไม่กดรับ */
     val received_date: String = "",
+    /** "" = สินค้า (ต้องกดรับ) | food = ค่าอาหาร (จ่ายด้วย SPayLater ไม่ต้องกดรับ นับรอบบิลจากวันสั่ง) — แอพ Android */
+    val kind: String = "",
 )
 
 @Suppress("PropertyName")
