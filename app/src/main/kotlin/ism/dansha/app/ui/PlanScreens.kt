@@ -318,16 +318,16 @@ private fun PlanRow(d: DanshaData, b: Bill, onClick: () -> Unit) {
     }
 }
 
-/** รายละเอียดบิล: จ่าย / ยกเลิกจ่าย / แก้ไข / ลบ */
+/** รายละเอียดบิล: จ่าย / ยกเลิกจ่าย / แก้ไข / ลบ (initialDate = วันที่จ่ายตั้งต้น, null = วันนี้) */
 @Composable
-private fun BillPage(d: DanshaData, b: Bill, vm: MainViewModel, onClose: () -> Unit) {
+internal fun BillPage(d: DanshaData, b: Bill, vm: MainViewModel, initialDate: String? = null, onClose: () -> Unit) {
     var editing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val paid = b.status == "paid"
     var amount by remember(b.id) { mutableStateOf(amountText(b.est_amount)) }
     var accountId by remember(b.id) { mutableStateOf(b.account_id.ifEmpty { Forms.defaultAccount(d, "expense") }) }
     var toAccountId by remember(b.id) { mutableStateOf(b.to_account_id) }
-    var date by remember(b.id) { mutableStateOf(Dates.todayStr()) }
+    var date by remember(b.id) { mutableStateOf(initialDate ?: Dates.todayStr()) }
     val accounts = Forms.accountChoices(d, b.account_id).map { it.id to it.name }
     val section = SECTION_LABELS[PlanBook.sectionOf(b)]
 

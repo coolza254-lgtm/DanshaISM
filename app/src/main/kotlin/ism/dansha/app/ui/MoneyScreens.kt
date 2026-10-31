@@ -80,7 +80,7 @@ fun ProgressBar(fraction: Float, color: Color, track: Color, modifier: Modifier 
 // ---------- ภาพรวม ----------
 
 @Composable
-fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onOpenDebt: () -> Unit, onOpenTransactions: () -> Unit) {
+fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onOpenDebt: () -> Unit, onOpenTransactions: () -> Unit, onCatchUp: () -> Unit = {}) {
     val p = LocalPalette.current
     val ctx = LocalContext.current
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -126,6 +126,9 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
         }
         val h = c.home
         val ov = c.overview
+
+        // ไม่ได้จดหลายวัน → ชวนกลับมาจดต่อ
+        item(key = "catch_up") { CatchUpCard(d, onCatchUp) }
 
         // การ์ดหลัก: วันนี้ใช้ได้ (กระดาษแปะ + เทปวาชิ + ไฮไลต์)
         item {

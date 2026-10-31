@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.EventRepeat
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Savings
@@ -246,6 +247,7 @@ fun MoreScreen(d: DanshaData, vm: MainViewModel, onOpen: (Page) -> Unit) {
         item {
             Card {
                 SectionLabel("จัดการ")
+                MenuRow(Icons.Outlined.History, "กลับมาจดต่อ", "ไม่ได้จดหลายวัน: จดย้อนหลังทีเดียว · บิลที่ถึงกำหนด · ปรับยอดให้ตรงยอดจริง") { onOpen(Page.CatchUp) }
                 MenuRow(Icons.Outlined.AccountBalance, "บัญชี", "เพิ่ม/แก้บัญชี วงเงิน ตัวคำนวณหนี้ (${d.accounts.size} บัญชี)") { onOpen(Page.Accounts) }
                 MenuRow(Icons.Outlined.EventRepeat, "แม่แบบแผนบิล", "รายการที่เกิดทุกรอบ (${d.billTemplates.size} แม่แบบ)") { onOpen(Page.Templates) }
                 MenuRow(Icons.Outlined.ShoppingBag, "Shopee", "บันทึกออเดอร์ · เช็คก่อนซื้อ · สถิติ (${d.shopee.size} ออเดอร์)") { onOpen(Page.Shopee) }

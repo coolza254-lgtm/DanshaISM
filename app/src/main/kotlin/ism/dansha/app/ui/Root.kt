@@ -69,7 +69,7 @@ enum class Tab(val label: String, val icon: ImageVector) {
 }
 
 /** หน้าที่เปิดซ้อนบนแท็บ */
-enum class Page { More, Accounts, Templates, Shopee, Port, Settings, Savings }
+enum class Page { More, Accounts, Templates, Shopee, Port, Settings, Savings, CatchUp }
 
 @Composable
 fun DanshaRoot(vm: MainViewModel) {
@@ -157,7 +157,7 @@ fun DanshaRoot(vm: MainViewModel) {
                         ) { t ->
                             tabStates.SaveableStateProvider(t.name) {
                                 when (t) {
-                                    Tab.Home -> HomeScreen(data, computed, vm, onOpenDebt = { tab = Tab.Debt }, onOpenTransactions = { tab = Tab.Transactions })
+                                    Tab.Home -> HomeScreen(data, computed, vm, onOpenDebt = { tab = Tab.Debt }, onOpenTransactions = { tab = Tab.Transactions }, onCatchUp = { open(Page.CatchUp) })
                                     Tab.Transactions -> TransactionsTab(data, vm)
                                     Tab.Plan -> PlanScreen(data, computed, vm, onOpenTemplates = { open(Page.Templates) })
                                     Tab.Debt -> DebtScreen(data, computed, vm)
@@ -186,6 +186,7 @@ fun DanshaRoot(vm: MainViewModel) {
                             Page.Port -> PortPage(data, vm, ::back)
                             Page.Settings -> SettingsPage(data, vm, ::back)
                             Page.Savings -> SelfSavePage(data, vm, ::back)
+                            Page.CatchUp -> CatchUpPage(data, computed, vm, ::back)
                         }
                     }
                 }

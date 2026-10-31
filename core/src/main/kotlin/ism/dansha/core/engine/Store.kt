@@ -882,4 +882,42 @@ class Store private constructor(d: DanshaData) {
     fun setConfig(values: Map<String, String>) {
         config.putAll(values)
     }
+
+    // ---------- กลับมาจดต่อ ----------
+
+    /** จดย้อนหลังหลายรายการ (เฉพาะบรรทัดที่อ่านได้) — คืนจำนวนที่จด */
+    fun addBackfill(lines: List<CatchUp.Line>): Int {
+        val ok = lines.filter { it.ok }
+        if (ok.isEmpty()) fail("ยังไม่มีรายการที่อ่านได้")
+        ok.forEach { l ->
+            createTransaction(
+                Transaction(
+                    id = "", date = l.date, type = l.type, account_id = l.accountId, amount = round2(l.amount!!).toDec(),
+                    currency = accounts.firstOrNull { it.id == l.accountId }?.currency.orEmpty(),
+                    category_id = l.categoryId, subcategory_id = l.subcategoryId, note = l.note, source = "manual",
+                )
+            )
+        }
+        return ok.size
+    }
+
+    /**
+     * ปรับยอดบัญชีให้ตรงยอดจริง: ส่วนต่างบันทึกเป็นรายการเดียว (หมวด อื่นๆ / รายรับอื่นๆ) source = adjust
+     * ตรงกันอยู่แล้ว = null · บัญชีหนี้ที่มีตัวคำนวณปรับที่นี่ไม่ได้
+     */
+    fun adjustBalance(accountId: String, actual: Double, date: String? = null, note: String = ""): Transaction? {
+        val acc = accounts.firstOrNull { it.id == accountId } ?: fail("ไม่พบบัญชี")
+        if (isEngineAccount(acc) || isSplAccount(acc)) fail("บัญชีหนี้ที่มีตัวคำนวณ ให้เทียบยอดในหน้าหนี้")
+        if (actual.isNaN() || actual.isInfinite()) fail("ยอดจริงไม่ถูกต้อง")
+        val row = CatchUp.balanceRows(data(), today()).firstOrNull { it.account.id == accountId } ?: fail("บัญชีนี้ปิดใช้อยู่")
+        val adj = CatchUp.adjustment(row, actual) ?: return null
+        val (main, sub) = if (adj.type == "income") categoryByName("รายรับอื่นๆ", "income") else categoryByName("อื่นๆ")
+        return createTransaction(
+            Transaction(
+                id = "", date = date?.ifEmpty { null } ?: today(), type = adj.type, account_id = acc.id, amount = adj.amount.toDec(),
+                currency = acc.currency, category_id = main, subcategory_id = sub,
+                note = note.ifEmpty { if (adj.type == "income") "ยอดที่ไม่ได้จด (เงินเข้า)" else "ยอดที่ไม่ได้จด" }, source = CatchUp.ADJUST,
+            )
+        )
+    }
 }
