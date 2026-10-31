@@ -1,19 +1,26 @@
 package ism.dansha.app.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -25,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,9 +46,11 @@ import ism.dansha.core.engine.AscendState
 import ism.dansha.core.engine.CatchUp
 import ism.dansha.core.engine.Engine
 import ism.dansha.core.engine.Forms
+import ism.dansha.core.engine.FreshStart
 import ism.dansha.core.engine.Outlook
 import ism.dansha.core.engine.PlanBook
 import ism.dansha.core.engine.SPayLater
+import ism.dansha.core.engine.Setup
 import ism.dansha.core.engine.isEngineAccount
 import ism.dansha.core.engine.isSplAccount
 import kotlinx.coroutines.Dispatchers
@@ -53,9 +63,12 @@ import java.time.LocalDate
  *  จดที่จำได้ (หลายรายการทีเดียว) → บิลที่ถึงกำหนด → ค่าเดินทาง/หนี้ → ใส่ยอดจริงของแต่ละบัญชี (ส่วนต่าง = ยอดที่ไม่ได้จด)
  */
 
-/** การ์ดบนหน้าภาพรวม: ไม่ได้จดมาตั้งแต่ 2 วัน */
+/** ปุ่มบนหน้าภาพรวมที่พาไปหน้าอื่น (Root เป็นคนเปิด) */
+enum class HomeNav { CatchUp, FreshStart, Accounts, Templates, Plan, Add }
+
+/** การ์ดบนหน้าภาพรวม: ไม่ได้จดมาตั้งแต่ 2 วัน → กลับมาจดต่อ หรือเริ่มใหม่ */
 @Composable
-fun CatchUpCard(d: DanshaData, onOpen: () -> Unit) {
+fun CatchUpCard(d: DanshaData, onNav: (HomeNav) -> Unit) {
     val p = LocalPalette.current
     val gap = remember(d) { CatchUp.gap(d) }
     val last = gap.lastEntry ?: return
@@ -67,7 +80,126 @@ fun CatchUpCard(d: DanshaData, onOpen: () -> Unit) {
             fontSize = 14.sp, color = p.ink.copy(alpha = 0.8f),
         )
         Spacer(Modifier.height(8.dp))
-        Button(onClick = onOpen) { Text("กลับมาจดต่อ") }
+        WrapRow {
+            Button(onClick = { onNav(HomeNav.CatchUp) }) { Text("กลับมาจดต่อ") }
+            OutlinedButton(onClick = { onNav(HomeNav.FreshStart) }) { Text("เริ่มใหม่ (ล้างประวัติ)") }
+        }
+    }
+}
+
+/** เช็คลิสต์เริ่มต้นใช้งาน: หลังเริ่มใหม่ หรือผู้ใช้ใหม่ — ทำครบ/กดซ่อนแล้วหายไป */
+@Composable
+fun SetupCard(d: DanshaData, vm: MainViewModel, onNav: (HomeNav) -> Unit) {
+    val p = LocalPalette.current
+    val show = remember(d) { Setup.show(d) }
+    if (!show) return
+    val items = remember(d) { Setup.items(d) }
+    Card(color = p.stickyBlue) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("เริ่มต้นใช้งาน", Modifier.weight(1f), fontFamily = Hand, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = p.primary)
+            Text("${items.count { it.done }}/${items.size}", fontWeight = FontWeight.SemiBold, color = p.ink)
+        }
+        Text("กรอกข้อมูลสำคัญก่อน ตัวเลข \"วันนี้ใช้ได้\" กับ \"สิ้นรอบเหลือ\" จะได้แม่น", fontSize = 14.sp, color = p.ink.copy(alpha = 0.8f))
+        Spacer(Modifier.height(6.dp))
+        items.forEach { item ->
+            SetupRow(item) {
+                onNav(
+                    when (item.step) {
+                        Setup.Step.Accounts -> HomeNav.Accounts
+                        Setup.Step.Income, Setup.Step.Fixed -> HomeNav.Templates
+                        Setup.Step.Plan -> HomeNav.Plan
+                        Setup.Step.FirstEntry -> HomeNav.Add
+                    },
+                )
+            }
+        }
+        TextButton(onClick = { vm.edit<Unit> { setConfig(mapOf(Setup.DONE_KEY to "true")) } }) { Text("ซ่อนเช็คลิสต์นี้") }
+    }
+}
+
+@Composable
+private fun SetupRow(item: Setup.Item, onClick: () -> Unit) {
+    val p = LocalPalette.current
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier.size(22.dp).border(1.8.dp, if (item.done) p.positive else p.ink, RoundedCornerShape(4.dp)),
+            contentAlignment = Alignment.Center,
+        ) { if (item.done) Text("✓", color = p.positive, fontWeight = FontWeight.Bold, fontSize = 15.sp) }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                item.title, fontSize = 15.sp, color = if (item.done) p.muted else p.ink, fontWeight = FontWeight.Medium,
+                textDecoration = if (item.done) TextDecoration.LineThrough else null,
+            )
+            if (!item.done) Text(item.hint, fontSize = 12.sp, color = p.muted)
+        }
+        if (!item.done) Text("›", fontSize = 20.sp, color = p.primary, fontWeight = FontWeight.Bold)
+    }
+}
+
+/**
+ * เริ่มใหม่ (ล้างประวัติ): บอกว่าจะลบ/เก็บอะไร → ใส่ยอดจริงของแต่ละบัญชี → ยืนยัน
+ * แอพเก็บสำเนาไว้ในเครื่องก่อนล้างเสมอ (กู้คืนได้จากเมนูเพิ่มเติม)
+ */
+@Composable
+fun FreshStartPage(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) {
+    val p = LocalPalette.current
+    val today = Dates.todayStr()
+    val preview = remember(d) { FreshStart.preview(d) }
+    val rows = remember(d) { CatchUp.balanceRows(d, today) }
+    val debtNames = remember(d) { d.accounts.filter { it.active && (isEngineAccount(it) || isSplAccount(it)) }.joinToString(", ") { it.name } }
+    val actual = remember { mutableStateMapOf<String, String>() }
+    var ask by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        uri?.let { vm.export(it) }
+    }
+
+    FormPage("เริ่มใหม่ (ล้างประวัติ)", onClose, onSave = null) {
+        error?.let { Note(it, p.negative) }
+        Card {
+            Text("ลบทิ้ง", fontWeight = FontWeight.SemiBold, color = p.negative)
+            KeyValue("รายการเก่า", "${preview.removeTxns} รายการ")
+            KeyValue("แผนบิลทุกรอบ", "${preview.removeBills} รายการ")
+            if (preview.removeOrders > 0) KeyValue("ออเดอร์ Shopee จ่ายเต็ม/ยกเลิก", "${preview.removeOrders} รายการ")
+            Spacer(Modifier.height(8.dp))
+            Text("เก็บไว้", fontWeight = FontWeight.SemiBold, color = p.positive)
+            Note("บัญชี หมวดหมู่ แม่แบบแผนบิล ตั้งค่า หนี้ย่อย พอร์ตลงทุน", p.ink)
+            if (preview.keepTxns > 0) {
+                Note("รายการ ${preview.keepTxns} รายการของบัญชีหนี้ (Ascend/SPayLater) และ 60/40 — ตัวคำนวณหนี้ยังใช้อยู่ ลบแล้วยอดหนี้จะผิด", p.ink)
+            }
+        }
+        OutlinedButton(onClick = { exportLauncher.launch(vm.exportFileName()) }, modifier = Modifier.fillMaxWidth()) { Text("ส่งออกไฟล์สำรองก่อน (แนะนำ)") }
+        Note("แอพเก็บสำเนาไว้ในเครื่องให้ด้วย กู้คืนได้จากเมนูเพิ่มเติม → กู้คืนข้อมูลก่อนเริ่มใหม่")
+
+        SectionLabel("ยอดจริงตอนนี้ของแต่ละบัญชี")
+        Note("เปิดแอพธนาคาร/วอลเล็ทแล้วใส่ยอดตอนนี้ · เว้นว่าง = ใช้ยอดในแอพ")
+        if (rows.isEmpty()) Note("ยังไม่มีบัญชี — เพิ่มได้หลังเริ่มใหม่ในหน้าบัญชี")
+        else Card {
+            rows.forEachIndexed { i, r ->
+                if (i > 0) HorizontalDivider(Modifier.padding(vertical = 6.dp), color = p.line)
+                BalanceInput(r, actual[r.account.id].orEmpty(), showDiff = false) { actual[r.account.id] = it }
+            }
+        }
+        if (debtNames.isNotEmpty()) Note("หนี้ $debtNames ยอดเท่าเดิม — ถ้าไม่ตรงแอพจริง ไปหน้าหนี้ → เทียบยอดกับแอพ Ascend")
+        Button(
+            onClick = { ask = true }, enabled = !busy, modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = p.negative),
+        ) { Text(if (busy) "กำลังล้าง…" else "ล้างประวัติและเริ่มใหม่") }
+    }
+
+    if (ask) {
+        ConfirmDialog(
+            "ล้างประวัติ?", "ลบรายการเก่า ${preview.removeTxns} รายการ และแผนบิลทั้งหมด (มีสำเนาเก็บไว้ในเครื่อง กู้คืนได้)", "ล้างเลย",
+            onConfirm = {
+                busy = true
+                error = null
+                val map = rows.mapNotNull { r -> Forms.parseAmount(actual[r.account.id].orEmpty())?.let { r.account.id to it } }.toMap()
+                vm.freshStart(map, onError = { error = it; busy = false }, onOk = { busy = false; onClose() })
+            },
+            onDismiss = { ask = false },
+        )
     }
 }
 
@@ -103,6 +235,7 @@ fun CatchUpPage(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, on
     var workCycle by remember { mutableStateOf<String?>(null) }
     var reconcile by remember { mutableStateOf<Account?>(null) }
     var shopee by remember { mutableStateOf(false) }
+    var fresh by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
     // อ่านข้อความหลังหยุดพิมพ์ครู่หนึ่ง (เดาหมวดจากประวัติทุกบรรทัด ทำเบื้องหลัง)
@@ -120,6 +253,10 @@ fun CatchUpPage(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, on
         Note(
             (if (last != null) "จดล่าสุด ${thaiDate(last)} (${gap.days} วันก่อน) · " else "") + "ทำตามลำดับ ข้ามข้อที่ไม่มีได้",
             p.ink,
+        )
+        Text(
+            "ไม่อยากไล่จดย้อนหลัง? เริ่มใหม่ (ล้างประวัติ) ›", Modifier.clickable { fresh = true }.padding(vertical = 4.dp),
+            color = p.primary, fontWeight = FontWeight.SemiBold, fontSize = 15.sp,
         )
         error?.let { Note(it, p.negative) }
         var step = 0
@@ -246,6 +383,7 @@ fun CatchUpPage(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, on
     val rst = ra?.let { c?.debts?.get(it.id) as? AscendState }
     if (ra != null && rst != null) ReconcilePage(d, ra, rst, vm) { reconcile = null }
     if (shopee) ShopeePage(d, c, vm) { shopee = false }
+    if (fresh) FreshStartPage(d, vm) { fresh = false }
 }
 
 @Composable
@@ -305,7 +443,7 @@ private fun DueBillLine(b: Bill, onClick: () -> Unit) {
 }
 
 @Composable
-private fun BalanceInput(r: CatchUp.BalanceRow, value: String, onChange: (String) -> Unit) {
+private fun BalanceInput(r: CatchUp.BalanceRow, value: String, showDiff: Boolean = true, onChange: (String) -> Unit) {
     val p = LocalPalette.current
     val cur = if (r.account.currency != "THB") " ${r.account.currency}" else ""
     Row(Modifier.padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -317,6 +455,7 @@ private fun BalanceInput(r: CatchUp.BalanceRow, value: String, onChange: (String
         }
     }
     AmountField(if (r.isCredit) "ยอดใช้ไปจริง" else "ยอดจริงตอนนี้", value, onChange)
+    if (!showDiff) return
     val a = Forms.parseAmount(value) ?: return
     val adj = CatchUp.adjustment(r, a)
     Text(

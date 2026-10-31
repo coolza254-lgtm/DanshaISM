@@ -24,10 +24,11 @@ object CatchUp {
     /** lastEntry = วันที่จดล่าสุด (ตามเวลาที่บันทึก), days = ผ่านมากี่วัน */
     data class Gap(val lastEntry: String?, val days: Int)
 
+    /** วันที่เริ่มใหม่ (ล้างประวัติ) นับเป็นวันที่จดล่าสุดด้วย */
     fun gap(d: DanshaData, today: LocalDate = Dates.today()): Gap {
-        val last = d.transactions.mapNotNull { t ->
+        val last = (d.transactions.mapNotNull { t ->
             t.created_at.take(10).takeIf { isIso(it) } ?: t.date.takeIf { isIso(it) }
-        }.maxOrNull() ?: return Gap(null, 0)
+        } + listOfNotNull(d.config[FreshStart.KEY]?.takeIf { isIso(it) })).maxOrNull() ?: return Gap(null, 0)
         return Gap(last, ChronoUnit.DAYS.between(LocalDate.parse(last), today).toInt().coerceAtLeast(0))
     }
 

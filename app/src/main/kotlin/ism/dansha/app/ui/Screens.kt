@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.EventRepeat
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Savings
@@ -264,6 +265,11 @@ fun MoreScreen(d: DanshaData, vm: MainViewModel, onOpen: (Page) -> Unit) {
                 }
                 MenuRow(Icons.Outlined.Download, "ส่งออกไฟล์ข้อมูล", "บันทึกเป็น ${vm.exportFileName()} ไว้สำรอง") {
                     exportLauncher.launch(vm.exportFileName())
+                }
+                MenuRow(Icons.Outlined.RestartAlt, "เริ่มใหม่ (ล้างประวัติ)", "ลบรายการเก่า เก็บบัญชี แม่แบบ หนี้ไว้ แล้วตั้งยอดบัญชีใหม่") { onOpen(Page.FreshStart) }
+                val backup = remember(d) { vm.freshStartBackupDate() }
+                if (backup != null) {
+                    MenuRow(Icons.Outlined.Restore, "กู้คืนข้อมูลก่อนเริ่มใหม่", "สำเนาวันที่ ${thaiDate(backup)} (แทนที่ข้อมูลตอนนี้)") { vm.restoreFreshStartBackup() }
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(

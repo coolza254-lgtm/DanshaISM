@@ -304,6 +304,41 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _message.value = "เริ่มใหม่แล้ว (มีหมวดหมู่ตั้งต้นให้)"
     }
 
+    // ---------- เริ่มใหม่ (ล้างประวัติ) ----------
+
+    /** สำเนาข้อมูลก่อนล้างประวัติครั้งล่าสุด (อยู่ในเครื่อง สำรองไปกับ Auto Backup) */
+    private fun freshStartBackup(): File = File(getApplication<Application>().filesDir, "backup-before-fresh-start.json")
+
+    /** วันที่ของสำเนาก่อนล้างประวัติ (ไม่มี = null) */
+    fun freshStartBackupDate(): String? = freshStartBackup().takeIf { it.exists() }?.let {
+        java.time.Instant.ofEpochMilli(it.lastModified()).atZone(Dates.ZONE).toLocalDate().toString()
+    }
+
+    /** เก็บสำเนาทั้งหมดไว้ก่อน แล้วล้างประวัติ (สำเนาไม่สำเร็จ = ไม่ล้าง) */
+    fun freshStart(actual: Map<String, Double>, onError: (String) -> Unit, onOk: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                val text = repo.exportText(BuildConfig.VERSION_NAME)
+                withContext(Dispatchers.IO) { freshStartBackup().writeText(text) }
+            } catch (e: Exception) {
+                onError("เก็บสำเนาข้อมูลไม่สำเร็จ เลยยังไม่ล้าง (${e.message ?: e.javaClass.simpleName})")
+                return@launch
+            }
+            edit<ism.dansha.core.engine.FreshStart.Preview>(ok = "เริ่มใหม่แล้ว", onError = onError, onOk = { onOk() }) { freshStart(actual) }
+        }
+    }
+
+    /** กู้คืนข้อมูลก่อนล้างประวัติ (ผ่านหน้ายืนยันเหมือนนำเข้าไฟล์) */
+    fun restoreFreshStartBackup() = viewModelScope.launch {
+        try {
+            val text = withContext(Dispatchers.IO) { freshStartBackup().readText() }
+            val parsed = withContext(Dispatchers.Default) { DataFile.parse(text) }
+            _pendingImport.value = PendingImport(parsed, "สำเนาก่อนเริ่มใหม่ (${freshStartBackupDate()?.let { ism.dansha.app.ui.thaiDate(it) }.orEmpty()})")
+        } catch (e: Exception) {
+            _message.value = "กู้คืนไม่ได้: อ่านสำเนาไม่สำเร็จ"
+        }
+    }
+
     // ---------- อัปเดตแอพ ----------
 
     private fun autoCheckUpdate() {

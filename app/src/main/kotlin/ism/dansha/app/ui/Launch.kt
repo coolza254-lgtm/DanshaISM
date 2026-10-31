@@ -6,7 +6,8 @@ enum class Launch(val action: String) {
     ADD_INCOME("ism.dansha.app.ADD_INCOME"),
     ADD_TRANSFER("ism.dansha.app.ADD_TRANSFER"),
     TRANSACTIONS("ism.dansha.app.TRANSACTIONS"),
-    PLAN("ism.dansha.app.PLAN");
+    PLAN("ism.dansha.app.PLAN"),
+    CATCH_UP("ism.dansha.app.CATCH_UP");
 
     companion object {
         fun fromAction(action: String?): Launch? = entries.firstOrNull { it.action == action }

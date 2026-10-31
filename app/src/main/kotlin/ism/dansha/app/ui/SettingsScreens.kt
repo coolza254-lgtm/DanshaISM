@@ -67,6 +67,7 @@ fun SettingsPage(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) {
             "pay_cycle_start_day", "shop_warn_pct", "shop_buffer", "shopee_receive_days",
             "copay_enabled", "copay_name", "copay_account_id", "copay_gov_rate", "copay_daily_cap", "copay_monthly_cap", "copay_total_cap", "copay_start", "copay_end",
             "daily_summary_enabled", "daily_summary_hour", "debt_reminder_enabled", "debt_reminder_days", "bill_reminder_enabled", "bill_reminder_days",
+            "log_reminder_enabled", "log_reminder_hour",
         )
         val changed = keys.filter { v[it] != cfg[it] }.associateWith { v[it].orEmpty() }
         val manual = fxManual.filter { (c, text) -> c != "THB" && text != amountText(d.fx.firstOrNull { it.currency == c }?.manual_rate) }
@@ -129,6 +130,11 @@ fun SettingsPage(d: DanshaData, vm: MainViewModel, onClose: () -> Unit) {
         if (bool("debt_reminder_enabled")) TextInput("ล่วงหน้ากี่วัน (คั่นด้วย ,)", v["debt_reminder_days"].orEmpty(), { v["debt_reminder_days"] = it }, placeholder = "3,1")
         SwitchRow("บิลในแผนที่ยังไม่จ่าย", bool("bill_reminder_enabled"), { v["bill_reminder_enabled"] = it.toString() })
         if (bool("bill_reminder_enabled")) TextInput("ล่วงหน้ากี่วัน (คั่นด้วย ,)", v["bill_reminder_days"].orEmpty(), { v["bill_reminder_days"] = it }, placeholder = "1")
+        val logOn = v["log_reminder_enabled"] != "false"
+        SwitchRow("เตือนให้จดทุกวัน", logOn, { v["log_reminder_enabled"] = it.toString() }, sub = "ถึงเวลาแล้ววันนี้ยังไม่ได้จดอะไรเลย → แจ้งให้จด (ไม่ได้จดหลายวัน → พาไปหน้ากลับมาจดต่อ)")
+        if (logOn) {
+            AmountField("เตือนตอนกี่โมง (0–23)", v["log_reminder_hour"] ?: "20", { v["log_reminder_hour"] = it.filter(Char::isDigit).take(2) })
+        }
         Row {
             OutlinedButton(onClick = { Notifier.show(context, 1, true, Notify.dailySummary(d, Dates.now())) }) { Text("ลองแจ้งสรุป") }
             Spacer(Modifier.width(8.dp))

@@ -8,6 +8,8 @@
 - แจ้งเตือนในเครื่อง (WorkManager): ครบกำหนดหนี้/บิล + สรุปรายวัน, ปุ่มแชร์สรุปผ่าน share sheet
 - อัตราแลกเปลี่ยนดึงเองวันละครั้ง (open.er-api.com สำรองด้วย frankfurter.app) กรอกเองทับได้
 
+**ทำงานต่อ (คนหรือ AI): อ่าน [`HANDOFF.md`](HANDOFF.md) ก่อน และอัปเดตทุกครั้งที่ทำงานเสร็จ** · สเปกทั้งหมดอยู่ที่ [`docs/SYSTEM_SPEC.md`](docs/SYSTEM_SPEC.md)
+
 **repo นี้มีแต่โค้ด** ห้าม commit ข้อมูลส่วนตัว (`dansha-data-*.json`), keystore หรือ token (`.gitignore` กันไว้แล้ว)
 
 ## โครงสร้าง

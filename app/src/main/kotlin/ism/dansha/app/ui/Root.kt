@@ -69,7 +69,7 @@ enum class Tab(val label: String, val icon: ImageVector) {
 }
 
 /** หน้าที่เปิดซ้อนบนแท็บ */
-enum class Page { More, Accounts, Templates, Shopee, Port, Settings, Savings, CatchUp }
+enum class Page { More, Accounts, Templates, Shopee, Port, Settings, Savings, CatchUp, FreshStart }
 
 @Composable
 fun DanshaRoot(vm: MainViewModel) {
@@ -127,6 +127,7 @@ fun DanshaRoot(vm: MainViewModel) {
                 else adding = when (a) { Launch.ADD_INCOME -> "income"; Launch.ADD_TRANSFER -> "transfer"; else -> "expense" }
             Launch.TRANSACTIONS -> tab = Tab.Transactions
             Launch.PLAN -> tab = Tab.Plan
+            Launch.CATCH_UP -> if (!data.isEmpty()) open(Page.CatchUp)
         }
     }
 
@@ -157,7 +158,16 @@ fun DanshaRoot(vm: MainViewModel) {
                         ) { t ->
                             tabStates.SaveableStateProvider(t.name) {
                                 when (t) {
-                                    Tab.Home -> HomeScreen(data, computed, vm, onOpenDebt = { tab = Tab.Debt }, onOpenTransactions = { tab = Tab.Transactions }, onCatchUp = { open(Page.CatchUp) })
+                                    Tab.Home -> HomeScreen(data, computed, vm, onOpenDebt = { tab = Tab.Debt }, onOpenTransactions = { tab = Tab.Transactions }, onNav = { n ->
+                                        when (n) {
+                                            HomeNav.CatchUp -> open(Page.CatchUp)
+                                            HomeNav.FreshStart -> open(Page.FreshStart)
+                                            HomeNav.Accounts -> open(Page.Accounts)
+                                            HomeNav.Templates -> open(Page.Templates)
+                                            HomeNav.Plan -> tab = Tab.Plan
+                                            HomeNav.Add -> adding = "expense"
+                                        }
+                                    })
                                     Tab.Transactions -> TransactionsTab(data, vm)
                                     Tab.Plan -> PlanScreen(data, computed, vm, onOpenTemplates = { open(Page.Templates) })
                                     Tab.Debt -> DebtScreen(data, computed, vm)
@@ -187,6 +197,7 @@ fun DanshaRoot(vm: MainViewModel) {
                             Page.Settings -> SettingsPage(data, vm, ::back)
                             Page.Savings -> SelfSavePage(data, vm, ::back)
                             Page.CatchUp -> CatchUpPage(data, computed, vm, ::back)
+                            Page.FreshStart -> FreshStartPage(data, vm, ::back)
                         }
                     }
                 }

@@ -42,6 +42,24 @@ object Notify {
         return NotifyMessage("ใกล้ครบกำหนด ${items.size} รายการ · รวม ${Reminders.money(total)}", lines)
     }
 
+    /** เตือนให้จด (เปิดอยู่ถ้าไม่ได้ปิดเอง) ตอนกี่โมง ค่าตั้งต้น 20:00 */
+    fun logReminderOn(cfg: Map<String, String>): Boolean = cfg["log_reminder_enabled"] != "false"
+    fun logReminderHour(cfg: Map<String, String>): Int = cfg["log_reminder_hour"]?.trim()?.toIntOrNull()?.coerceIn(0, 23) ?: 20
+
+    /** ถึงเวลาที่ตั้งแล้ววันนี้ยังไม่ได้จดอะไรเลย → ชวนจด (ไม่ได้จดหลายวัน → ชวนกลับมาจดต่อ) */
+    fun logNudge(d: DanshaData, now: LocalDateTime): NotifyMessage? {
+        val cfg = Engine.config(d)
+        if (!logReminderOn(cfg) || now.hour < logReminderHour(cfg)) return null
+        val today = now.toLocalDate().toString()
+        if (d.transactions.any { it.created_at.take(10) == today }) return null
+        val gap = CatchUp.gap(d, now.toLocalDate())
+        return if (gap.lastEntry != null && gap.days >= CatchUp.REMIND_DAYS) {
+            NotifyMessage("ไม่ได้จดมา ${gap.days} วันแล้ว", "เปิดแอพ → กลับมาจดต่อ: จดที่จำได้ แล้วใส่ยอดจริงของแต่ละบัญชี ใช้ไม่กี่นาที")
+        } else {
+            NotifyMessage("วันนี้ยังไม่ได้จดเลย ✏️", "ใช้อะไรไปบ้างวันนี้? แตะเพื่อจดรายจ่าย (พิมพ์สั้นๆ เช่น กาแฟ 35)")
+        }
+    }
+
     /** สรุปรายวัน: ใช้ทั้งแจ้งเตือนและปุ่มแชร์ให้แฟน */
     fun dailySummary(d: DanshaData, now: LocalDateTime): NotifyMessage {
         val ov = Engine.overview(d, now)

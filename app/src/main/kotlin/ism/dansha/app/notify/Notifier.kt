@@ -46,12 +46,12 @@ object Notifier {
         Build.VERSION.SDK_INT < 33 ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
-    fun show(context: Context, id: Int, summary: Boolean, msg: NotifyMessage) {
+    /** launch = เปิดแอพไปหน้าไหน (null = หน้าแรก) */
+    fun show(context: Context, id: Int, summary: Boolean, msg: NotifyMessage, launch: ism.dansha.app.ui.Launch? = null) {
         if (!canNotify(context)) return
-        val open = PendingIntent.getActivity(
-            context, 0, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
-            PendingIntent.FLAG_IMMUTABLE,
-        )
+        val intent = if (launch != null) ism.dansha.app.Shortcuts.intent(context, launch)
+        else Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        val open = PendingIntent.getActivity(context, id, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val n = NotificationCompat.Builder(context, if (summary) CHANNEL_SUMMARY else CHANNEL_REMIND)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(msg.title)
@@ -92,6 +92,14 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         if (now.dayOfMonth == 14 && now.hour >= 9 && prefs.getString("slip", "") != today) {
             Notifier.show(applicationContext, 3, false, NotifyMessage("🧾 Slip เงินเดือนออกแล้ว", "เปิดแผนบิล → รายรับ → กรอกเงินเดือนจาก Slip ไว้ก่อนเงินเข้าวันที่ 15"))
             prefs.edit().putString("slip", today).apply()
+        }
+        // ถึงเวลาแล้ววันนี้ยังไม่ได้จดอะไรเลย → ชวนจด (วันละครั้ง) · ไม่ได้จดหลายวัน → เปิดหน้ากลับมาจดต่อ
+        if (prefs.getString("nudge", "") != today) {
+            Notify.logNudge(d, now)?.let { m ->
+                val behind = ism.dansha.core.engine.CatchUp.gap(d, now.toLocalDate()).days >= ism.dansha.core.engine.CatchUp.REMIND_DAYS
+                Notifier.show(applicationContext, 4, false, m, if (behind) ism.dansha.app.ui.Launch.CATCH_UP else ism.dansha.app.ui.Launch.ADD_EXPENSE)
+                prefs.edit().putString("nudge", today).apply()
+            }
         }
         return Result.success()
     }

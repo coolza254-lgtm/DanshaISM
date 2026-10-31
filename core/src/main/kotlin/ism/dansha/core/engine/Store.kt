@@ -920,4 +920,39 @@ class Store private constructor(d: DanshaData) {
             )
         )
     }
+
+    // ---------- เริ่มใหม่ (ล้างประวัติ) ----------
+
+    /**
+     * ลบประวัติ (ดู FreshStart) แล้วตั้งยอดตั้งต้นใหม่: actual = ยอดจริงของบัญชี (id → ยอด, ไม่มี = ยอดในแอพตอนนี้)
+     * บัญชีวงเงินที่ไม่มีตัวคำนวณ: ยอด = ยอดใช้ไป · หนี้ Ascend/SPayLater ไม่เปลี่ยน
+     */
+    fun freshStart(actual: Map<String, Double>): FreshStart.Preview {
+        val d0 = data()
+        val preview = FreshStart.preview(d0)
+        val keep = FreshStart.keeps(d0)
+        val views = Engine.accounts(d0, Engine.debtStates(d0, today(), false)).associateBy { it.account.id }
+        val kept = transactions.filter(keep)
+        val flow = FreshStart.flows(kept)
+        accounts.replaceAll { a ->
+            if (isEngineAccount(a) || isSplAccount(a)) return@replaceAll a
+            val credit = a.type == "revolving_credit"
+            val target = actual[a.id]?.takeIf { it.isFinite() } ?: views[a.id]?.let { if (credit) it.used else it.balance } ?: a.opening_balance.num()
+            val f = flow[a.id] ?: 0.0
+            a.copy(opening_balance = round2(if (credit) target + f else target - f).toDec())
+        }
+        val keptIds = kept.map { it.id }.toSet()
+        transactions.clear()
+        transactions += kept
+        bills.clear()
+        shopee.removeAll { FreshStart.removable(it) }
+        shopee.replaceAll { if (it.txn_id.isNotEmpty() && it.txn_id !in keptIds) it.copy(txn_id = "") else it }
+        val day = today()
+        config[FreshStart.KEY] = day
+        config.remove(Setup.DONE_KEY)
+        // กระปุกออม: นับใหม่ตั้งแต่วันนี้ (รายการโอนเข้ากระปุกเก่าถูกลบไปด้วย)
+        if (config["mytax_enabled"] == "true") config["mytax_start"] = day
+        if (config["nodiscount_enabled"] == "true") config["nodiscount_start"] = day
+        return preview
+    }
 }
