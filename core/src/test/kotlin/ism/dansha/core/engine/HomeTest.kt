@@ -27,4 +27,21 @@ class HomeTest {
         // รอบบิล 16 ก.ย. – 15 ต.ค.: เบิกเงินสด 3,000 / ซื้อ 120.5 + 89 + 260 + 75 + ยอดยกมา 350
         assertEquals(listOf("วงเงินผ่อนยาว" to 3000.0, "วงเงินผ่อนสั้น" to 894.5, "วงเงินค้างจ่าย" to 0.0), f.cycleSpend.map { it.first to it.second.total })
     }
+
+    @Test
+    fun spentOnDay() {
+        val seed = ism.dansha.core.Schema.seed()
+        val acc = listOf(
+            ism.dansha.core.Account("a", "เงินสด", "cash", "THB", active = true),
+            ism.dansha.core.Account("u", "USD", "bank", "USD", active = true),
+        )
+        fun t(id: String, type: String, acc: String, amt: String, date: String = "2026-11-01") =
+            ism.dansha.core.Transaction(id, date, type = type, account_id = acc, to_account_id = if (type == "transfer") "u" else "", amount = java.math.BigDecimal(amt))
+        val d = seed.copy(
+            accounts = acc,
+            fx = listOf(ism.dansha.core.FxRate("USD", manual_rate = java.math.BigDecimal(35))),
+            transactions = listOf(t("1", "expense", "a", "35.5"), t("2", "expense", "u", "2"), t("3", "income", "a", "100"), t("4", "transfer", "a", "50"), t("5", "expense", "a", "99", "2026-10-31")),
+        )
+        assertEquals(105.5, Home.spentOn(d, "2026-11-01"))
+    }
 }

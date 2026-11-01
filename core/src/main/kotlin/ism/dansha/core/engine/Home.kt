@@ -35,6 +35,12 @@ data class CopayCard(
 )
 
 object Home {
+    /** รายจ่ายของวันนั้น (บาท ไม่นับโอน) — แถบ "วันนี้ใช้ไป" บนหน้าแรก */
+    fun spentOn(d: ism.dansha.core.DanshaData, date: String): Double {
+        val fx = Balances.fxMap(d.fx)
+        return round2(d.transactions.filter { it.type == "expense" && it.date == date }.sumOf { Summary.thb(it, d, fx) })
+    }
+
     fun figures(ov: Overview): HomeFigures {
         val fx = ov.fx
         val debtTotal = round2(

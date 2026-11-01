@@ -126,6 +126,7 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
         }
         val h = c.home
         val ov = c.overview
+        val spentToday = ism.dansha.core.engine.Home.spentOn(d, ov.today)
 
         // เริ่มต้นใช้งาน (หลังเริ่มใหม่/ผู้ใช้ใหม่) · ไม่ได้จดหลายวัน → ชวนกลับมาจดต่อ
         item(key = "setup") { SetupCard(d, vm, onNav) }
@@ -152,6 +153,8 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
                         (h.projected?.let { "สิ้นรอบเหลือ " + signedBaht(it) } ?: "ยังไม่มีแผนรอบนี้ · คิดจากเงินที่มี") + " · อีก ${h.daysLeft} วัน",
                         color = p.ink, fontSize = 15.sp,
                     )
+                    Spacer(Modifier.height(10.dp))
+                    TodaySpendBar(spentToday, h.perDay)
                     Spacer(Modifier.height(12.dp))
                     DayBoxes(total, passed)
                     Box(Modifier.fillMaxWidth().padding(top = 6.dp)) {
@@ -164,6 +167,9 @@ fun HomeScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
                 Box(Modifier.align(Alignment.TopCenter).offset(y = (-10).dp).size(92.dp, 22.dp).rotate(-3f).background(p.tape))
             }
         }
+
+        // จดไวบรรทัดเดียว ไม่ต้องเปิดฟอร์ม
+        item(key = "quick_add") { QuickAddBar(d, vm) { onNav(HomeNav.Add) } }
 
         // ไปทำงานวันนี้: กดจดค่ารถ 8/12/20 หรือ Grab (เฉพาะวันที่ติ๊กไว้ในแผนบิล)
         item(key = "travel_today") { TravelTodayCard(d, vm) }

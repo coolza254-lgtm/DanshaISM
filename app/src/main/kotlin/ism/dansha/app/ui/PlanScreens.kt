@@ -174,7 +174,8 @@ fun PlanScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
         // หมวดต่างๆ
         SECTION_LABELS.forEach { (section, label) ->
             val list = bySection[section].orEmpty()
-            val alwaysShow = section in listOf(PlanBook.INCOME, PlanBook.FIXED, PlanBook.DEBT, PlanBook.TRAVEL, PlanBook.PLANNED)
+            // หมวดว่าง (ยกเว้นรายรับ/ค่าเดินทางที่มีปุ่มของตัวเอง) ย่อเป็นปุ่ม "+ หมวด" แถวเดียวข้างล่าง ไม่เป็นการ์ดเปล่า
+            val alwaysShow = section in listOf(PlanBook.INCOME, PlanBook.TRAVEL)
             if (!alwaysShow && list.isEmpty()) return@forEach
             item(key = "sec_$section") {
                 PlanSection(
@@ -199,6 +200,17 @@ fun PlanScreen(d: DanshaData, c: MainViewModel.Computed?, vm: MainViewModel, onO
                         }
                         PlanBook.TRAVEL -> TravelSummary(travel, openClaims.size, openClaims.sumOf { it.amount?.toDouble() ?: 0.0 }, onWorkDays = { workDays = true }, onClaims = { claims = true })
                         else -> Unit
+                    }
+                }
+            }
+        }
+
+        val emptySections = SECTION_LABELS.filterKeys { it !in listOf(PlanBook.INCOME, PlanBook.TRAVEL) && bySection[it].isNullOrEmpty() }
+        if (emptySections.isNotEmpty()) {
+            item(key = "empty_sections") {
+                WrapRow(Modifier.padding(start = 22.dp, end = 12.dp, top = 8.dp)) {
+                    emptySections.forEach { (section, label) ->
+                        OutlinedButton(onClick = { creating = section }) { Text("+ ${label.first} ${label.second}") }
                     }
                 }
             }
